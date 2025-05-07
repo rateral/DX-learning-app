@@ -143,8 +143,8 @@ function Main() {
       if (result) {
         console.log('App: コース順序変更成功、データを再取得します');
         
-        // 少し待機してから再取得
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // 少し待機してから再取得（Supabaseの更新を待つ）
+        await new Promise(resolve => setTimeout(resolve, 300));
         
         // 順序変更後はコースデータを再取得
         await fetchCoursesAndTasks();
@@ -154,13 +154,10 @@ function Main() {
           getCoursesWithTasks().map((course, idx) => `${idx}: ${course.title}`)
         );
         
-        // さらに待機してから更新
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
         // UIの強制更新（状態更新を行って確実に再レンダリングを促す）
         setUpdateTrigger(prev => prev + 1);
         
-        // 少し待機してから再度更新
+        // 遅延更新を設定して画面が確実に更新されるようにする
         setTimeout(() => {
           console.log('App: 遅延更新を実行します');
           setUpdateTrigger(prev => prev + 1);

@@ -12,6 +12,8 @@ export const SharedDataProvider = ({ children }) => {
   const [progressData, setProgressData] = useState({});
   const [loading, setLoading] = useState(true);
   const [courseOrder, setCourseOrder] = useState([]); // コース順序を保持する状態
+  const [dataLoaded, setDataLoaded] = useState(false);
+  const [learningSessions, setLearningSessions] = useState([]); // 学習セッション用の状態を追加
 
   // タスクとコースを一緒に取得する関数
   const fetchCoursesAndTasks = useCallback(async () => {
@@ -25,29 +27,104 @@ export const SharedDataProvider = ({ children }) => {
       setCourses(coursesData || []);
       
       // コース順序の初期化
-      // ローカルストレージから保存された順序を取得
-      const savedOrder = localStorage.getItem('app_course_order');
-      let orderArray = [];
-      
-      if (savedOrder) {
-        try {
-          orderArray = JSON.parse(savedOrder);
+      try {
+        // Supabaseからコース順序を取得
+        const { data: orderData, error: orderError } = await supabase
+          .from('course_order')
+          .select('*')
+          .single();
+        
+        if (orderError && orderError.code !== 'PGRST116') { // PGRST116はレコードが見つからない場合のエラー
+          console.error('コース順序の取得エラー:', orderError);
+          throw orderError;
+        }
+        
+        let orderArray = [];
+        
+        if (orderData?.order_array) {
+          // Supabaseから取得した順序を使用
+          orderArray = orderData.order_array;
+          console.log('Supabaseからコース順序を取得しました:', orderArray);
+          
           // 新しく追加されたコースや削除されたコースを考慮して順序を更新
           const validIds = coursesData.map(course => course.id);
           const filteredOrder = orderArray.filter(id => validIds.includes(id));
           const missingIds = validIds.filter(id => !orderArray.includes(id));
           
           orderArray = [...filteredOrder, ...missingIds];
-        } catch (e) {
-          console.error('保存された順序の解析エラー:', e);
+        } else {
+          // 順序がSupabaseにない場合は、ローカルストレージを確認
+          const savedOrder = localStorage.getItem('app_course_order');
+          
+          if (savedOrder) {
+            try {
+              orderArray = JSON.parse(savedOrder);
+              console.log('ローカルストレージからコース順序を取得しました:', orderArray);
+              
+              // 新しく追加されたコースや削除されたコースを考慮して順序を更新
+              const validIds = coursesData.map(course => course.id);
+              const filteredOrder = orderArray.filter(id => validIds.includes(id));
+              const missingIds = validIds.filter(id => !orderArray.includes(id));
+              
+              orderArray = [...filteredOrder, ...missingIds];
+              
+              // ローカルストレージから取得した順序をSupabaseに保存（初回のみ）
+              const { error: saveError } = await supabase
+                .from('course_order')
+                .insert([{ order_array: orderArray }]);
+              
+              if (saveError) {
+                console.error('コース順序の保存エラー:', saveError);
+              } else {
+                console.log('ローカル順序をSupabaseに保存しました');
+              }
+            } catch (e) {
+              console.error('保存された順序の解析エラー:', e);
+              orderArray = coursesData.map(course => course.id);
+            }
+          } else {
+            // 順序が保存されていない場合はデフォルト順序を使用
+            orderArray = coursesData.map(course => course.id);
+            
+            // デフォルト順序をSupabaseに保存
+            const { error: saveError } = await supabase
+              .from('course_order')
+              .insert([{ order_array: orderArray }]);
+            
+            if (saveError) {
+              console.error('デフォルトコース順序の保存エラー:', saveError);
+            }
+          }
+        }
+        
+        setCourseOrder(orderArray);
+      } catch (orderError) {
+        console.error('コース順序の処理エラー:', orderError);
+        
+        // エラー時はローカルストレージから取得
+        const savedOrder = localStorage.getItem('app_course_order');
+        let orderArray = [];
+        
+        if (savedOrder) {
+          try {
+            orderArray = JSON.parse(savedOrder);
+            // 新しく追加されたコースや削除されたコースを考慮して順序を更新
+            const validIds = coursesData.map(course => course.id);
+            const filteredOrder = orderArray.filter(id => validIds.includes(id));
+            const missingIds = validIds.filter(id => !orderArray.includes(id));
+            
+            orderArray = [...filteredOrder, ...missingIds];
+          } catch (e) {
+            console.error('保存された順序の解析エラー:', e);
+            orderArray = coursesData.map(course => course.id);
+          }
+        } else {
+          // 順序が保存されていない場合はデフォルト順序を使用
           orderArray = coursesData.map(course => course.id);
         }
-      } else {
-        // 順序が保存されていない場合はデフォルト順序を使用
-        orderArray = coursesData.map(course => course.id);
+        
+        setCourseOrder(orderArray);
       }
-      
-      setCourseOrder(orderArray);
       
       // タスク取得
       const { data: tasksData, error: tasksError } = await supabase
@@ -71,6 +148,24 @@ export const SharedDataProvider = ({ children }) => {
       }, {}) || {};
       
       setTasks(tasksByGroup);
+      
+      // 学習セッションをSupabaseから取得
+      try {
+        const { data: sessionsData, error: sessionsError } = await supabase
+          .rpc('get_learning_sessions');
+          
+        if (sessionsError) {
+          console.error('学習セッションの取得エラー:', sessionsError);
+          // エラーがあってもアプリは起動させる（空の配列をセット）
+          setLearningSessions([]);
+        } else {
+          // セッションデータをセット
+          setLearningSessions(sessionsData || []);
+        }
+      } catch (sessionsLoadError) {
+        console.error('学習セッションの読み込み例外:', sessionsLoadError);
+        setLearningSessions([]);
+      }
       
       return { coursesData, tasksByGroup };
     } catch (error) {
@@ -202,15 +297,76 @@ export const SharedDataProvider = ({ children }) => {
     }
   }, []);
 
-  // 初期データロード
+  // 初期データのロード
   useEffect(() => {
-    const loadData = async () => {
-      const { tasksByGroup } = await fetchCoursesAndTasks();
-      await fetchProgress(tasksByGroup);
+    const loadInitialData = async () => {
+      try {
+        // コース一覧をSupabaseから取得
+        const { data: coursesData, error: coursesError } = await supabase
+          .from('courses')
+          .select('*');
+          
+        if (coursesError) {
+          console.error('コース一覧の取得エラー:', coursesError);
+          throw coursesError;
+        }
+
+        // コースデータをセット
+        setCourses(coursesData || []);
+        
+        // コース並び順をSupabaseから取得
+        try {
+          console.log('初期ロード時にコース順序を取得します...');
+          const savedOrder = await loadCoursesOrderFromSupabase();
+          if (savedOrder && Array.isArray(savedOrder) && savedOrder.length > 0) {
+            console.log('初期ロード時にコース順序をセットします:', savedOrder);
+            setCourseOrder(savedOrder);
+          } else {
+            console.log('保存された順序が見つからないため、デフォルト順序を使用します');
+            // デフォルト順序を設定（コースIDの配列）
+            const defaultOrder = coursesData.map(course => course.id);
+            setCourseOrder(defaultOrder);
+            
+            // デフォルト順序を保存
+            saveCoursesOrderToSupabase(defaultOrder)
+              .then(success => {
+                if (success) {
+                  console.log('デフォルトのコース順序を保存しました');
+                  localStorage.setItem('app_course_order', JSON.stringify(defaultOrder));
+                }
+              })
+              .catch(err => console.error('デフォルト順序の保存に失敗:', err));
+          }
+        } catch (orderError) {
+          console.error('コース順序の取得エラー:', orderError);
+          // エラー時はコース順をそのまま使用
+          const defaultOrder = coursesData.map(course => course.id);
+          setCourseOrder(defaultOrder);
+        }
+        
+        // タスク一覧をSupabaseから取得
+        const { data: tasksData, error: tasksError } = await supabase
+          .from('tasks')
+          .select('*');
+          
+        if (tasksError) {
+          console.error('タスク一覧の取得エラー:', tasksError);
+          throw tasksError;
+        }
+        
+        // タスクデータをセット
+        setTasks(tasksData || []);
+        
+        // データ読み込み完了
+        setDataLoaded(true);
+      } catch (error) {
+        console.error('初期データのロードに失敗:', error);
+        setDataLoaded(true); // エラーでもロード完了とマーク
+      }
     };
 
-    loadData();
-  }, [fetchCoursesAndTasks, fetchProgress]);
+    loadInitialData();
+  }, []);
 
   // コース追加
   const addCourse = async (course) => {
@@ -262,6 +418,65 @@ export const SharedDataProvider = ({ children }) => {
         
         if (data && data.length > 0) {
           console.log('Supabaseタスク追加成功');
+          
+          // タスク順序データが存在するか確認
+          const { data: orderData, error: orderError } = await supabase
+            .rpc('get_task_order_by_course', {
+              p_course_id: courseId
+            });
+          
+          if (orderError && orderError.code !== 'PGRST116') {
+            console.warn('タスク順序データ確認エラー:', orderError);
+            // エラーがあっても続行
+          }
+          
+          // タスク順序データがない場合は作成
+          if (!orderData || orderData.length === 0) {
+            console.log('タスク順序データが存在しません。新規作成します:', courseId);
+            
+            // 現在のタスクIDを取得
+            const { data: tasksData } = await supabase
+              .from('tasks')
+              .select('id')
+              .eq('course_id', courseId);
+            
+            const taskIds = tasksData ? tasksData.map(t => t.id) : [data[0].id];
+            
+            // 新しいタスク順序レコードを作成
+            const { error: createError } = await supabase
+              .from('task_order')
+              .insert([{ 
+                course_id: courseId,
+                order_array: taskIds 
+              }]);
+            
+            if (createError) {
+              console.error('タスク順序レコード作成エラー:', createError);
+              // エラーがあっても続行
+            } else {
+              console.log('タスク順序レコードを作成しました:', { courseId, taskIds });
+            }
+          } else {
+            // 既存のタスク順序に新しいタスクを追加
+            const existingOrder = orderData[0].order_array || [];
+            const updatedOrder = [...existingOrder, data[0].id];
+            
+            const { error: updateError } = await supabase
+              .from('task_order')
+              .update({ 
+                order_array: updatedOrder,
+                updated_at: new Date().toISOString() 
+              })
+              .eq('id', orderData[0].id);
+            
+            if (updateError) {
+              console.error('タスク順序の更新エラー:', updateError);
+              // エラーがあっても続行
+            } else {
+              console.log('タスク順序を更新しました:', updatedOrder);
+            }
+          }
+          
           updateLocalTasks(courseId, data[0]);
           return {
             id: data[0].id,
@@ -270,7 +485,7 @@ export const SharedDataProvider = ({ children }) => {
           };
         }
       } catch (supabaseError) {
-        console.error('Supabase例外:', supabaseError.message);
+        console.error('Supabaseでのタスク追加エラー:', supabaseError.message);
         // Supabase接続に失敗した場合、ローカルストレージを使用
         console.log('ローカルストレージを使用してタスクを追加します');
         
@@ -577,31 +792,304 @@ export const SharedDataProvider = ({ children }) => {
 
   // コースとそのタスクを結合したデータを作成（順序付き）
   const getCoursesWithTasks = () => {
-    // コース順序に従ってコースを並び替え
-    const debugOutput = false; // trueにするとデバッグログを出力
-    if (debugOutput) {
-      console.log('getCoursesWithTasks(): コース順序とコース一覧', {
-        courseOrder: courseOrder,
-        courses: courses.map(c => ({ id: c.id, title: c.title }))
+    // ヘルパー関数：順序配列に基づいてコースを並び替え
+    const orderCoursesByOrderArray = (coursesList, orderArray) => {
+      // ロギング
+      console.log('順序付け処理', {
+        コース数: coursesList.length,
+        順序配列長: orderArray?.length || 0,
+        コースID一覧: coursesList.map(c => c.id),
+        順序配列: orderArray
       });
-    }
+      
+      // 順序配列が無効な場合は元のコース順を返す
+      if (!orderArray || !Array.isArray(orderArray) || orderArray.length === 0) {
+        console.log('有効な順序配列がないため、元のコース順を使用します');
+        return [...coursesList];
+      }
+      
+      // コースを順序配列に従って並び替え
+      const orderedCourses = [...coursesList].sort((a, b) => {
+        const indexA = orderArray.indexOf(a.id);
+        const indexB = orderArray.indexOf(b.id);
+        // 順序リストに含まれていない場合は末尾に配置（9999は十分大きな値）
+        return (indexA === -1 ? 9999 : indexA) - (indexB === -1 ? 9999 : indexB);
+      });
+      
+      // 並び替え結果を確認
+      console.log('順序付け結果', {
+        順序前: coursesList.map(c => c.title),
+        順序後: orderedCourses.map(c => c.title)
+      });
+      
+      return orderedCourses;
+    };
     
-    const orderedCourses = [...courses].sort((a, b) => {
-      const indexA = courseOrder.indexOf(a.id);
-      const indexB = courseOrder.indexOf(b.id);
-      // 順序リストに含まれていない場合は末尾に配置
-      return (indexA === -1 ? 9999 : indexA) - (indexB === -1 ? 9999 : indexB);
-    });
+    // courseOrderをコンソールに出力（デバッグ用）
+    console.log('現在のcourseOrder状態', courseOrder);
     
-    // デバッグ情報として順序を出力
-    console.log('表示用に並び替えたコース順序:', orderedCourses.map(c => c.title));
+    // 順序配列があれば使用し、なければコースIDの配列を生成
+    const effectiveOrderArray = courseOrder.length > 0 
+      ? courseOrder 
+      : courses.map(course => course.id);
     
+    // 順序配列に基づいてコースを並び替え
+    const orderedCourses = orderCoursesByOrderArray(courses, effectiveOrderArray);
+    
+    // 順序付きコースにタスクを追加
     return orderedCourses.map(course => ({
       ...course,
       tasks: tasks[course.id] || []
     }));
   };
 
+  // コース順序の保存（Supabase）
+  const saveCoursesOrderToSupabase = async (newOrder) => {
+    // デバッグ用のコード
+    console.log('コース順序保存データ: ', {
+      order_array: newOrder,
+      データ型: typeof newOrder,
+      配列の長さ: newOrder.length,
+      配列の内容: JSON.stringify(newOrder)
+    });
+    
+    // Supabaseクライアント経由で保存試行
+    try {
+      console.log('Supabaseクライアント経由で順序保存を試みます...');
+      const { data, error } = await supabase
+        .from('course_order')
+        .select('*')
+        .maybeSingle();
+      
+      if (error && error.code !== 'PGRST116') {
+        console.error('コース順序取得エラー:', error);
+        console.error('エラー詳細:', {
+          エラーコード: error.code,
+          エラーメッセージ: error.message,
+          ヒント: error.hint,
+          詳細: error.details
+        });
+        throw error;
+      }
+      
+      if (data) {
+        // 既存レコードを更新
+        const { error: updateError } = await supabase
+          .from('course_order')
+          .update({ 
+            order_array: newOrder,
+            updated_at: new Date().toISOString() 
+          })
+          .eq('id', data.id);
+        
+        if (updateError) {
+          console.error('コース順序の更新エラー:', updateError);
+          console.error('更新エラー詳細:', {
+            エラーコード: updateError.code,
+            エラーメッセージ: updateError.message,
+            ヒント: updateError.hint,
+            詳細: updateError.details
+          });
+          throw updateError;
+        }
+        
+        console.log('Supabaseクライアントでコース順序を更新しました');
+        return true;
+      } else {
+        // 新規レコードを作成
+        const { error: insertError } = await supabase
+          .from('course_order')
+          .insert([{ 
+            order_array: newOrder,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }]);
+        
+        if (insertError) {
+          console.error('コース順序の新規作成エラー:', insertError);
+          console.error('新規作成エラー詳細:', {
+            エラーコード: insertError.code,
+            エラーメッセージ: insertError.message,
+            ヒント: insertError.hint,
+            詳細: insertError.details
+          });
+          throw insertError;
+        }
+        
+        console.log('Supabaseクライアントでコース順序を新規作成しました');
+        return true;
+      }
+    } catch (supabaseClientError) {
+      console.error('Supabaseクライアント経由での保存に失敗:', supabaseClientError);
+      
+      // 直接Fetch APIを使ってSupabaseにアクセス（フォールバック）
+      try {
+        console.log('直接Fetch APIを使ってコース順序保存を試みます...');
+        
+        // 既存レコードを確認
+        const checkResponse = await fetch(
+          'https://cpueevdrecsauwnifoom.supabase.co/rest/v1/course_order?select=id', 
+          {
+            method: 'GET',
+            headers: {
+              'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwdWVldmRyZWNzYXV3bmlmb29tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyNzU3NDYsImV4cCI6MjA2MTg1MTc0Nn0.HqwV6dhELkH7ZDCMuHTYO7TY6v0h4GcPUbCPwwYix4I',
+              'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwdWVldmRyZWNzYXV3bmlmb29tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyNzU3NDYsImV4cCI6MjA2MTg1MTc0Nn0.HqwV6dhELkH7ZDCMuHTYO7TY6v0h4GcPUbCPwwYix4I`,
+              'Accept': 'application/json'
+            }
+          }
+        );
+        
+        if (!checkResponse.ok) {
+          const errorText = await checkResponse.text();
+          console.error('コース順序レコード確認エラー:', errorText);
+          throw new Error('コース順序レコード確認に失敗しました');
+        }
+        
+        const checkData = await checkResponse.json();
+        
+        if (checkData && checkData.length > 0) {
+          // 更新(PATCH)
+          const updateResponse = await fetch(
+            `https://cpueevdrecsauwnifoom.supabase.co/rest/v1/course_order?id=eq.${checkData[0].id}`, 
+            {
+              method: 'PATCH',
+              headers: {
+                'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwdWVldmRyZWNzYXV3bmlmb29tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyNzU3NDYsImV4cCI6MjA2MTg1MTc0Nn0.HqwV6dhELkH7ZDCMuHTYO7TY6v0h4GcPUbCPwwYix4I',
+                'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwdWVldmRyZWNzYXV3bmlmb29tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyNzU3NDYsImV4cCI6MjA2MTg1MTc0Nn0.HqwV6dhELkH7ZDCMuHTYO7TY6v0h4GcPUbCPwwYix4I`,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal'
+              },
+              body: JSON.stringify({
+                order_array: newOrder,
+                updated_at: new Date().toISOString()
+              })
+            }
+          );
+          
+          if (!updateResponse.ok) {
+            const updateError = await updateResponse.text();
+            console.error('コース順序更新エラー:', updateError);
+            throw new Error('コース順序の更新に失敗しました');
+          }
+          
+          console.log('Fetch APIでコース順序を更新しました');
+        } else {
+          // 新規作成(POST)
+          const insertResponse = await fetch(
+            'https://cpueevdrecsauwnifoom.supabase.co/rest/v1/course_order', 
+            {
+              method: 'POST',
+              headers: {
+                'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwdWVldmRyZWNzYXV3bmlmb29tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyNzU3NDYsImV4cCI6MjA2MTg1MTc0Nn0.HqwV6dhELkH7ZDCMuHTYO7TY6v0h4GcPUbCPwwYix4I',
+                'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwdWVldmRyZWNzYXV3bmlmb29tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyNzU3NDYsImV4cCI6MjA2MTg1MTc0Nn0.HqwV6dhELkH7ZDCMuHTYO7TY6v0h4GcPUbCPwwYix4I`,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal'
+              },
+              body: JSON.stringify({
+                order_array: newOrder,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              })
+            }
+          );
+          
+          if (!insertResponse.ok) {
+            const insertError = await insertResponse.text();
+            console.error('コース順序作成エラー:', insertError);
+            throw new Error('コース順序の作成に失敗しました');
+          }
+          
+          console.log('Fetch APIでコース順序を新規作成しました');
+        }
+        
+        return true;
+      } catch (fetchError) {
+        console.error('Fetch APIでの保存にも失敗:', fetchError);
+        return false;
+      }
+    }
+  };
+  
+  // コース順序の読み込み（Supabase）
+  const loadCoursesOrderFromSupabase = async () => {
+    console.log('コース順序をSupabaseから読み込み試行...');
+    
+    try {
+      // まずはSupabaseクライアント経由で試す
+      try {
+        console.log('Supabaseクライアントでコース順序取得を試みます...');
+        const { data, error } = await supabase
+          .from('course_order')
+          .select('*')
+          .maybeSingle();
+        
+        if (error && error.code !== 'PGRST116') {
+          console.error('コース順序取得エラー:', error);
+          console.error('エラー詳細:', {
+            エラーコード: error.code,
+            エラーメッセージ: error.message,
+            ヒント: error.hint,
+            詳細: error.details
+          });
+          throw error;
+        }
+        
+        if (data?.order_array) {
+          console.log('Supabaseクライアントからコース順序を取得しました:', data.order_array);
+          return data.order_array;
+        }
+      } catch (supabaseClientError) {
+        console.error('Supabaseクライアントでの取得に失敗:', supabaseClientError);
+      }
+      
+      // クライアントでの取得に失敗した場合は直接APIを使用
+      try {
+        console.log('Fetch APIでコース順序取得を試みます...');
+        const response = await fetch(
+          'https://cpueevdrecsauwnifoom.supabase.co/rest/v1/course_order?select=*', 
+          {
+            method: 'GET',
+            headers: {
+              'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwdWVldmRyZWNzYXV3bmlmb29tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyNzU3NDYsImV4cCI6MjA2MTg1MTc0Nn0.HqwV6dhELkH7ZDCMuHTYO7TY6v0h4GcPUbCPwwYix4I',
+              'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwdWVldmRyZWNzYXV3bmlmb29tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyNzU3NDYsImV4cCI6MjA2MTg1MTc0Nn0.HqwV6dhELkH7ZDCMuHTYO7TY6v0h4GcPUbCPwwYix4I`,
+              'Accept': 'application/json'
+            }
+          }
+        );
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.length > 0 && data[0].order_array) {
+            console.log('Fetch APIからコース順序を取得しました:', data[0].order_array);
+            return data[0].order_array;
+          }
+        } else {
+          const errorText = await response.text();
+          console.error('Fetch APIでのコース順序取得エラー:', errorText);
+        }
+      } catch (fetchError) {
+        console.error('Fetch APIでの取得に失敗:', fetchError);
+      }
+      
+      // Supabaseからの取得に失敗した場合はローカルストレージを参照
+      const storedOrder = localStorage.getItem('app_course_order');
+      if (storedOrder) {
+        try {
+          const orderArray = JSON.parse(storedOrder);
+          console.log('ローカルストレージからコース順序を取得しました:', orderArray);
+          return orderArray;
+        } catch (e) {
+          console.error('ローカルストレージのコース順序のパースに失敗:', e);
+        }
+      }
+    } catch (error) {
+      console.error('コース順序の読み込みエラー:', error);
+    }
+    
+    console.log('コース順序の取得に失敗したため、空の配列を返します');
+    return [];
+  };
+  
   // コース順序の並び替え
   const reorderCourses = async (startIndex, endIndex) => {
     try {
@@ -626,90 +1114,94 @@ export const SharedDataProvider = ({ children }) => {
       const numStartIndex = Number(startIndex);
       const numEndIndex = Number(endIndex);
       
-      if (isNaN(numStartIndex) || isNaN(numEndIndex)) {
-        console.error('並び替えエラー: インデックスが数値に変換できません', { startIndex, endIndex });
-        return false;
-      }
-      
-      // 現在の順序付きコースリストを取得（表示順）
-      const orderedCoursesWithTasks = getCoursesWithTasks();
-      
-      // 移動対象と移動先のコース情報をログ出力（デバッグ用）
-      const sourceItem = orderedCoursesWithTasks[numStartIndex];
-      if (!sourceItem) {
-        console.error('並び替えエラー: 移動元のコースが見つかりません', { index: numStartIndex });
-        return false;
-      }
-      console.log('移動元コース:', { index: numStartIndex, id: sourceItem.id, title: sourceItem.title });
-      
-      const targetItem = orderedCoursesWithTasks[numEndIndex];
-      if (!targetItem) {
-        console.error('並び替えエラー: 移動先のコースが見つかりません', { index: numEndIndex });
-        return false;
-      }
-      console.log('移動先位置のコース:', { index: numEndIndex, id: targetItem.id, title: targetItem.title });
-      
-      // 実際の順序変更処理
-      // 1. 表示順に基づいたコースIDの配列を作成
-      const currentOrderedIds = orderedCoursesWithTasks.map(course => course.id);
-      console.log('並び替え前の順序 (表示順):', JSON.stringify(currentOrderedIds));
-      
-      // 2. 移動元の要素を取得
-      const movedItemId = currentOrderedIds[numStartIndex];
-      
-      // 3. 新しい順序を作成（安全に配列を複製）
-      let newOrder = [...currentOrderedIds];
-      
-      // 4. 元の配列から要素を削除
-      newOrder.splice(numStartIndex, 1);
-      
-      // 5. 対象の位置に要素を挿入
-      // 下への移動の場合、既に元の要素を削除したので、挿入位置を-1する必要がある
-      const insertPosition = numEndIndex > numStartIndex ? numEndIndex - 1 : numEndIndex;
-      newOrder.splice(insertPosition, 0, movedItemId);
-      
-      // 6. 順序が実際に変更されたか確認（デバッグ用）
-      const isOrderChanged = JSON.stringify(currentOrderedIds) !== JSON.stringify(newOrder);
-      console.log('順序は変更されましたか？', isOrderChanged);
-      if (!isOrderChanged) {
-        console.error('順序変更エラー: 並び替え前後で順序が同じです。処理を確認してください。');
-        // 別のアプローチで順序を変更してみる
-        newOrder = [...currentOrderedIds];
-        newOrder[numStartIndex] = currentOrderedIds[numEndIndex];
-        newOrder[numEndIndex] = currentOrderedIds[numStartIndex];
-        console.log('代替方法での並び替え後:', JSON.stringify(newOrder));
-      }
-      
-      console.log('並び替え後の順序:', JSON.stringify(newOrder));
-      
-      // 7. 新しい順序を設定
-      setCourseOrder(newOrder);
-      
-      // 8. ローカルストレージに保存
-      localStorage.setItem('app_course_order', JSON.stringify(newOrder));
-      
-      // 9. 並び替えの結果をコンソールに出力
-      console.log('新しい順序に基づくコース一覧:',
-        newOrder.map(id => {
-          const course = courses.find(c => c.id === id);
-          return course ? course.title : `不明(${id})`;
-        })
-      );
-      
-      // 10. コース自体も再ソートした状態更新を行う（順序を確実に反映）
-      const orderedCourses = [...courses].sort((a, b) => {
-        const indexA = newOrder.indexOf(a.id);
-        const indexB = newOrder.indexOf(b.id);
-        return (indexA === -1 ? 9999 : indexA) - (indexB === -1 ? 9999 : indexB);
+      // 表示順序で移動するコースを特定
+      const sortedCourses = [...courses].sort((a, b) => {
+        const indexA = courseOrder.indexOf(a.id);
+        const indexB = courseOrder.indexOf(b.id);
+        return (indexA === -1 ? courses.length : indexA) - (indexB === -1 ? courses.length : indexB);
       });
       
-      console.log('並び替え後のコース順序を確認:', orderedCourses.map(c => c.title));
+      console.log('表示用に並び替えたコース順序:', sortedCourses.map(c => c.title));
       
-      // 11. コース状態を強制的に更新
-      setCourses(orderedCourses);
+      // 移動元と移動先のコースを取得
+      const sourceItem = sortedCourses[numStartIndex];
+      const targetItem = sortedCourses[numEndIndex];
       
-      // 12. わざと少し待機して、UIの更新を確実にする
-      await new Promise(resolve => setTimeout(resolve, 300));
+      console.log('移動元コース:', {
+        index: numStartIndex,
+        id: sourceItem.id,
+        title: sourceItem.title
+      });
+      
+      console.log('移動先位置のコース:', {
+        index: numEndIndex,
+        id: targetItem.id,
+        title: targetItem.title
+      });
+      
+      // 現在のコース順序を取得
+      const currentOrder = [...courseOrder];
+      console.log('並び替え前の順序 (表示順):', currentOrder);
+      
+      // 順序を変更
+      const newOrder = [...currentOrder];
+      const sourceItemIndex = newOrder.indexOf(sourceItem.id);
+      const targetItemIndex = newOrder.indexOf(targetItem.id);
+      
+      if (sourceItemIndex !== -1) {
+        // ソースアイテムを削除
+        newOrder.splice(sourceItemIndex, 1);
+        
+        // ターゲット位置（移動後のインデックス）を計算
+        const targetPosition = targetItemIndex > sourceItemIndex 
+          ? targetItemIndex - 1  // ソースが削除されたため1つ減らす
+          : targetItemIndex;
+        
+        // ターゲット位置に挿入
+        newOrder.splice(targetPosition + (numEndIndex > numStartIndex ? 1 : 0), 0, sourceItem.id);
+      }
+      
+      // 順序が変更されたか確認
+      const isOrderChanged = JSON.stringify(currentOrder) !== JSON.stringify(newOrder);
+      console.log('順序は変更されましたか？', isOrderChanged);
+      
+      if (!isOrderChanged) {
+        console.log('並び替え不要: 順序に変更はありません');
+        return true;
+      }
+      
+      // 1. 新しい順序をSupabaseに保存
+      console.log('並び替え後の順序:', newOrder);
+      const saveSuccess = await saveCoursesOrderToSupabase(newOrder);
+      
+      if (!saveSuccess) {
+        console.error('コース順序の保存に失敗しました');
+        return false;
+      }
+      
+      // 2. 保存に成功したら、ローカルストレージにもバックアップ
+      localStorage.setItem('app_course_order', JSON.stringify(newOrder));
+      
+      // 3. 新しい順序を設定
+      const coursesToSort = [...courses];
+      const sortedIds = newOrder.filter(id => coursesToSort.some(c => c.id === id));
+      const missingIds = coursesToSort.map(c => c.id).filter(id => !newOrder.includes(id));
+      
+      const finalOrder = [...sortedIds, ...missingIds];
+      console.log('新しい順序に基づくコース一覧:', coursesToSort.sort((a, b) => {
+        const indexA = finalOrder.indexOf(a.id);
+        const indexB = finalOrder.indexOf(b.id);
+        return indexA - indexB;
+      }).map(c => c.title));
+      
+      // 4. 状態を更新
+      setCourseOrder(newOrder);
+      
+      console.log('並び替え後のコース順序を確認:', coursesToSort.sort((a, b) => {
+        const indexA = newOrder.indexOf(a.id);
+        const indexB = newOrder.indexOf(b.id);
+        return (indexA === -1 ? newOrder.length : indexA) - (indexB === -1 ? newOrder.length : indexB);
+      }).map(c => c.title));
       
       return true;
     } catch (error) {
@@ -826,7 +1318,7 @@ export const SharedDataProvider = ({ children }) => {
         setProgressData(prev => {
           const newProgress = { ...prev };
           Object.keys(newProgress).forEach(userId => {
-            if (newProgress[userId][courseId]) {
+            if (newProgress[userId] && newProgress[userId][courseId]) {
               delete newProgress[userId][courseId];
             }
           });
@@ -1123,6 +1615,7 @@ export const SharedDataProvider = ({ children }) => {
       courses,
       tasks,
       progressData,
+      learningSessions,
       addCourse,
       addTask,
       updateCourse,

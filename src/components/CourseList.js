@@ -11,7 +11,10 @@ function CourseList({ courses, onAddTask, onToggleTaskCompletion, onEditCourse, 
   // coursesが変更されたらlocalCoursesを更新
   useEffect(() => {
     console.log('CourseList: コース一覧を更新', courses.map(c => c.title));
-    setLocalCourses(courses); // 配列を直接設定（順序を維持）
+    
+    // 配列が変更されたことを確実に検知するために、新しい配列インスタンスを生成
+    const newCourses = [...courses];
+    setLocalCourses(newCourses); // 配列を直接設定（順序を維持）
     
     // 初回レンダリング以外で処理中状態を解除
     if (hasInitiallyRendered.current) {

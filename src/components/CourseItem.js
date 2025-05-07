@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { supabase } from '../supabase';
 
 function CourseItem({ course, isExpanded, onToggle, onAddTask, onToggleTaskCompletion, onEditCourse, onDeleteCourse, onEditTask, onDeleteTask }) {
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -40,51 +41,259 @@ function CourseItem({ course, isExpanded, onToggle, onAddTask, onToggleTaskCompl
     setShowTaskEditForm(true);
   };
 
+  // 保存された順序を適用する関数
+  const applyTaskOrder = (savedOrder) => {
+    // 保存された順序と現在のタスクを照合
+    const currentTaskIds = course.tasks.map(task => task.id);
+    // 順序が有効かチェック（両方に存在するIDのみ）
+    const validSavedIds = savedOrder.filter(id => currentTaskIds.includes(id));
+    // 保存されていないIDを取得
+    const missingIds = currentTaskIds.filter(id => !savedOrder.includes(id));
+    
+    if (validSavedIds.length > 0) {
+      // 有効な順序と新しいタスクを組み合わせて順序を更新
+      const orderedTasks = [
+        // 保存された順序を維持
+        ...validSavedIds.map(id => course.tasks.find(task => task.id === id)),
+        // 新しいタスクを末尾に追加
+        ...missingIds.map(id => course.tasks.find(task => task.id === id))
+      ].filter(Boolean); // nullや undefined を除外
+      
+      // ローカルのタスク順序を更新
+      setLocalTasks(orderedTasks);
+      console.log(`コース「${course.title}」のタスク順序を復元しました`);
+    } else {
+      // 保存された順序が無効な場合は現在のタスクをそのまま使用
+      setLocalTasks([...course.tasks]);
+    }
+  };
+
+  // ローカルストレージからのフォールバック
+  const fallbackToLocalStorage = () => {
+    const savedOrders = JSON.parse(localStorage.getItem('app_task_orders') || '{}');
+    const savedOrder = savedOrders[course.id];
+    
+    if (savedOrder && Array.isArray(savedOrder)) {
+      applyTaskOrder(savedOrder);
+    } else {
+      // 保存された順序がない場合は現在のタスクをそのまま使用
+      setLocalTasks([...course.tasks]);
+    }
+  };
+
   // タスク順序を保存するヘルパー関数
-  const saveTaskOrder = (updatedTasks) => {
+  const saveTaskOrder = async (updatedTasks) => {
     // タスクIDの配列を作成
     const taskIds = updatedTasks.map(task => task.id);
-    // ローカルストレージに保存（courseId単位で保存）
+    
+    // デバッグ用のコード
+    console.log('タスク順序保存データ: ', {
+      course_id: course.id,
+      course_id_type: typeof course.id,
+      order_array: taskIds,
+      データ型: typeof taskIds,
+      配列の長さ: taskIds.length,
+      配列の内容: JSON.stringify(taskIds)
+    });
+    
+    try {
+      // Supabaseへの直接APIリクエストを試みる（デバッグ用）
+      try {
+        console.log('Supabaseに直接APIリクエスト（テスト用）を送信します...');
+        const response = await fetch(`https://cpueevdrecsauwnifoom.supabase.co/rest/v1/rpc/get_task_order_by_course`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwdWVldmRyZWNzYXV3bmlmb29tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyNzU3NDYsImV4cCI6MjA2MTg1MTc0Nn0.HqwV6dhELkH7ZDCMuHTYO7TY6v0h4GcPUbCPwwYix4I',
+            'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwdWVldmRyZWNzYXV3bmlmb29tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyNzU3NDYsImV4cCI6MjA2MTg1MTc0Nn0.HqwV6dhELkH7ZDCMuHTYO7TY6v0h4GcPUbCPwwYix4I`,
+            'Accept': '*/*',
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify({
+            p_course_id: course.id
+          })
+        });
+        
+        console.log('直接APIリクエスト結果:', {
+          status: response.status,
+          statusText: response.statusText,
+          headers: Object.fromEntries([...response.headers])
+        });
+        
+        if (response.ok) {
+          const responseData = await response.json();
+          console.log('取得データ:', responseData);
+        } else {
+          const errorText = await response.text();
+          console.error('APIエラー内容:', errorText);
+        }
+      } catch (apiError) {
+        console.error('直接APIリクエストエラー:', apiError);
+      }
+      
+      // タスク順序データを取得して更新または作成
+      const { data, error } = await supabase
+        .rpc('get_task_order_by_course', {
+          p_course_id: course.id
+        });
+      
+      if (error) {
+        console.error('タスク順序の取得エラー:', error);
+        throw error;
+      }
+      
+      if (data && data.length > 0) {
+        // 既存の順序を更新
+        const { error: updateError } = await supabase
+          .from('task_order')
+          .update({ 
+            order_array: taskIds,
+            updated_at: new Date().toISOString() 
+          })
+          .eq('id', data[0].id);
+        
+        if (updateError) {
+          console.error('タスク順序の更新エラー:', updateError);
+          throw updateError;
+        }
+        
+        console.log(`コース「${course.title}」のタスク順序をSupabaseで更新しました`);
+      } else {
+        // 新しい順序を作成
+        console.log('新しいタスク順序レコードを作成します:', {
+          course_id: course.id,
+          order_array: taskIds
+        });
+        
+        const { error: insertError } = await supabase
+          .from('task_order')
+          .insert([{ 
+            course_id: course.id,
+            order_array: taskIds 
+          }]);
+        
+        if (insertError) {
+          console.error('タスク順序の作成エラー:', insertError);
+          throw insertError;
+        }
+        
+        console.log(`コース「${course.title}」のタスク順序をSupabaseに保存しました`);
+      }
+    } catch (error) {
+      console.error('Supabaseとの同期エラー:', error);
+      // エラー時はローカルストレージにフォールバック
+      const savedOrders = JSON.parse(localStorage.getItem('app_task_orders') || '{}');
+      savedOrders[course.id] = taskIds;
+      localStorage.setItem('app_task_orders', JSON.stringify(savedOrders));
+      console.log(`コース「${course.title}」のタスク順序をローカルストレージに保存しました（フォールバック）:`, taskIds);
+    }
+    
+    // 念のためローカルストレージにも保存（フォールバック用）
     const savedOrders = JSON.parse(localStorage.getItem('app_task_orders') || '{}');
     savedOrders[course.id] = taskIds;
     localStorage.setItem('app_task_orders', JSON.stringify(savedOrders));
-    console.log(`コース「${course.title}」のタスク順序を保存しました:`, taskIds);
   };
 
-  // 初期表示時にローカルストレージから順序を復元
+  // 初期表示時にタスク順序を復元
   useEffect(() => {
     if (course.tasks && course.tasks.length > 0) {
-      const savedOrders = JSON.parse(localStorage.getItem('app_task_orders') || '{}');
-      const savedOrder = savedOrders[course.id];
-      
-      if (savedOrder && Array.isArray(savedOrder)) {
-        // 保存された順序と現在のタスクを照合
-        const currentTaskIds = course.tasks.map(task => task.id);
-        // 順序が有効かチェック（両方に存在するIDのみ）
-        const validSavedIds = savedOrder.filter(id => currentTaskIds.includes(id));
-        // 保存されていないIDを取得
-        const missingIds = currentTaskIds.filter(id => !savedOrder.includes(id));
-        
-        if (validSavedIds.length > 0) {
-          // 有効な順序と新しいタスクを組み合わせて順序を更新
-          const orderedTasks = [
-            // 保存された順序を維持
-            ...validSavedIds.map(id => course.tasks.find(task => task.id === id)),
-            // 新しいタスクを末尾に追加
-            ...missingIds.map(id => course.tasks.find(task => task.id === id))
-          ].filter(Boolean); // nullや undefined を除外
+      const fetchTaskOrder = async () => {
+        try {
+          console.log(`コース「${course.title}」(ID: ${course.id})のタスク順序を取得開始...`);
           
-          // ローカルのタスク順序を更新
-          setLocalTasks(orderedTasks);
-          console.log(`コース「${course.title}」のタスク順序を復元しました`);
-        } else {
-          // 保存された順序が無効な場合は現在のタスクをそのまま使用
-          setLocalTasks([...course.tasks]);
+          let savedOrder = null;
+          
+          // Supabaseから順序を取得
+          try {
+            console.log('Supabaseクライアントで取得を試みます...');
+            // タスク順序RPCを使用
+            const { data, error } = await supabase
+              .rpc('get_task_order_by_course', {
+                p_course_id: course.id
+              });
+            
+            if (error) {
+              console.error('タスク順序RPC呼び出しエラー:', error);
+              throw error;
+            }
+            
+            if (data && data.length > 0) {
+              savedOrder = data[0].order_array;
+              console.log('Supabase RPCからタスク順序を取得しました:', savedOrder);
+            } else {
+              console.log('RPCからの取得結果が空です。フォールバック方法を試みます...');
+              // 通常のクエリを試みる
+              const { data: queryData, error: queryError } = await supabase
+                .from('task_order')
+                .select('*', {
+                  headers: {
+                    'Accept': '*/*'
+                  }
+                })
+                .eq('course_id', course.id)
+                .single();
+              
+              if (queryError && queryError.code !== 'PGRST116') {
+                console.error('通常クエリでのタスク順序取得エラー:', queryError);
+                throw queryError;
+              }
+              
+              if (queryData) {
+                savedOrder = queryData.order_array;
+                console.log('Supabase通常クエリからタスク順序を取得しました:', savedOrder);
+              } else {
+                // データが存在しない場合は新しいレコードを作成
+                console.log('タスク順序データが存在しません。新しいレコードを作成します:', course.id);
+                
+                const taskIds = course.tasks.map(task => task.id);
+                
+                try {
+                  const { data: newOrderData, error: createError } = await supabase
+                    .from('task_order')
+                    .insert([{ 
+                      course_id: course.id,
+                      order_array: taskIds 
+                    }])
+                    .select();
+                  
+                  if (createError) {
+                    console.error('タスク順序の作成エラー:', createError);
+                    throw createError;
+                  }
+                  
+                  if (newOrderData && newOrderData.length > 0) {
+                    savedOrder = newOrderData[0].order_array;
+                    console.log('新しいタスク順序レコードを作成しました:', savedOrder);
+                  }
+                } catch (createOrderError) {
+                  console.error('タスク順序レコード作成エラー:', createOrderError);
+                  // 作成に失敗した場合もフォールバック
+                  fallbackToLocalStorage();
+                  return;
+                }
+              }
+            }
+          } catch (supabaseError) {
+            console.error('Supabaseからの取得エラー:', supabaseError);
+            // エラー時はローカルストレージにフォールバック
+            fallbackToLocalStorage();
+            return;
+          }
+          
+          // 取得した順序を適用
+          if (savedOrder && Array.isArray(savedOrder)) {
+            applyTaskOrder(savedOrder);
+          } else {
+            // 保存された順序がない場合は現在のタスクをそのまま使用
+            setLocalTasks([...course.tasks]);
+          }
+        } catch (error) {
+          console.error('タスク順序の取得エラー:', error);
+          fallbackToLocalStorage();
         }
-      } else {
-        // 保存された順序がない場合は現在のタスクをそのまま使用
-        setLocalTasks([...course.tasks]);
-      }
+      };
+      
+      fetchTaskOrder();
     } else {
       setLocalTasks([]);
     }

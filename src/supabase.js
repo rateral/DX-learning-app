@@ -26,9 +26,15 @@ try {
       headers: {
         'x-application-name': 'learning-progress-app',
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
+        'Accept': '*/*', // より広いAcceptヘッダーを設定
       },
     },
+    // 固定オプションを追加
+    postgrest: {
+      headers: {
+        'Accept': '*/*',
+      }
+    }
   };
   
   // クライアント初期化
