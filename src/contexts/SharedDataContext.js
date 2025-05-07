@@ -1,0 +1,1147 @@
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { supabase } from '../supabase';
+
+const SharedDataContext = createContext();
+
+export const useSharedData = () => useContext(SharedDataContext);
+
+export const SharedDataProvider = ({ children }) => {
+  // データ状態
+  const [courses, setCourses] = useState([]);
+  const [tasks, setTasks] = useState({});
+  const [progressData, setProgressData] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [courseOrder, setCourseOrder] = useState([]); // コース順序を保持する状態
+
+  // タスクとコースを一緒に取得する関数
+  const fetchCoursesAndTasks = useCallback(async () => {
+    try {
+      // コース取得
+      const { data: coursesData, error: coursesError } = await supabase
+        .from('courses')
+        .select('*');
+      
+      if (coursesError) throw coursesError;
+      setCourses(coursesData || []);
+      
+      // コース順序の初期化
+      // ローカルストレージから保存された順序を取得
+      const savedOrder = localStorage.getItem('app_course_order');
+      let orderArray = [];
+      
+      if (savedOrder) {
+        try {
+          orderArray = JSON.parse(savedOrder);
+          // 新しく追加されたコースや削除されたコースを考慮して順序を更新
+          const validIds = coursesData.map(course => course.id);
+          const filteredOrder = orderArray.filter(id => validIds.includes(id));
+          const missingIds = validIds.filter(id => !orderArray.includes(id));
+          
+          orderArray = [...filteredOrder, ...missingIds];
+        } catch (e) {
+          console.error('保存された順序の解析エラー:', e);
+          orderArray = coursesData.map(course => course.id);
+        }
+      } else {
+        // 順序が保存されていない場合はデフォルト順序を使用
+        orderArray = coursesData.map(course => course.id);
+      }
+      
+      setCourseOrder(orderArray);
+      
+      // タスク取得
+      const { data: tasksData, error: tasksError } = await supabase
+        .from('tasks')
+        .select('*');
+      
+      if (tasksError) throw tasksError;
+      
+      // タスクをコースIDでグループ化
+      const tasksByGroup = tasksData?.reduce((acc, task) => {
+        const courseId = task.course_id;
+        if (!acc[courseId]) {
+          acc[courseId] = [];
+        }
+        acc[courseId].push({
+          id: task.id,
+          title: task.title,
+          createdAt: task.created_at
+        });
+        return acc;
+      }, {}) || {};
+      
+      setTasks(tasksByGroup);
+      
+      return { coursesData, tasksByGroup };
+    } catch (error) {
+      console.error('データ取得エラー:', error);
+      return { coursesData: [], tasksByGroup: {} };
+    }
+  }, []);
+
+  // 進捗データを取得する関数
+  const fetchProgress = useCallback(async (taskData) => {
+    try {
+      let progressStructure = {};
+      
+      try {
+        // Supabaseからのデータ取得を試みる
+        // タスク完了状態
+        const { data: completions, error: completionsError } = await supabase
+          .from('task_completions')
+          .select('*');
+        
+        if (completionsError) throw completionsError;
+        
+        // コース進捗
+        const { data: progress, error: progressError } = await supabase
+          .from('course_progress')
+          .select('*');
+        
+        if (progressError) throw progressError;
+        
+        // 進捗データの構造を構築
+        
+        // タスク完了状態を追加
+        completions?.forEach(completion => {
+          const { user_id, task_id, completed } = completion;
+          // タスクのコースIDを特定する必要がある
+          const taskInfo = Object.entries(taskData).find(([courseId, taskList]) => 
+            taskList.some(task => task.id === task_id)
+          );
+          
+          if (taskInfo) {
+            const courseId = taskInfo[0];
+            if (!progressStructure[user_id]) {
+              progressStructure[user_id] = {};
+            }
+            if (!progressStructure[user_id][courseId]) {
+              progressStructure[user_id][courseId] = {
+                completedTasks: {},
+                progress: 0
+              };
+            }
+            progressStructure[user_id][courseId].completedTasks[task_id] = completed;
+          }
+        });
+        
+        // コース進捗率を追加
+        progress?.forEach(prog => {
+          const { user_id, course_id, progress: progressValue } = prog;
+          if (!progressStructure[user_id]) {
+            progressStructure[user_id] = {};
+          }
+          if (!progressStructure[user_id][course_id]) {
+            progressStructure[user_id][course_id] = {
+              completedTasks: {},
+              progress: 0
+            };
+          }
+          progressStructure[user_id][course_id].progress = progressValue;
+        });
+        
+        console.log('Supabaseからの進捗データ取得成功');
+      } catch (supabaseError) {
+        console.error('Supabaseからの進捗データ取得エラー:', supabaseError.message);
+        console.log('ローカルストレージからデータを読み込みます');
+        
+        // ローカルストレージからデータ取得
+        const localTaskCompletions = JSON.parse(localStorage.getItem('app_task_completions') || '{}');
+        const localProgress = JSON.parse(localStorage.getItem('app_course_progress') || '{}');
+        
+        // ローカルデータを進捗構造に変換
+        Object.entries(localTaskCompletions).forEach(([userId, tasks]) => {
+          if (!progressStructure[userId]) {
+            progressStructure[userId] = {};
+          }
+          
+          // コースごとの進捗率を計算
+          Object.entries(taskData).forEach(([courseId, courseTasks]) => {
+            // このコースのタスク完了状況を確認
+            const completedTasksForCourse = courseTasks.filter(task => 
+              tasks[task.id] === true
+            );
+            
+            const progress = courseTasks.length > 0
+              ? Math.round((completedTasksForCourse.length / courseTasks.length) * 100)
+              : 0;
+            
+            // ローカル計算した進捗率または保存されていた進捗率を使用
+            const storedProgress = localProgress[userId]?.[courseId];
+            const finalProgress = storedProgress !== undefined ? storedProgress : progress;
+            
+            if (!progressStructure[userId][courseId]) {
+              progressStructure[userId][courseId] = {
+                completedTasks: {},
+                progress: finalProgress
+              };
+            } else {
+              progressStructure[userId][courseId].progress = finalProgress;
+            }
+            
+            // このコースのタスク完了状態を設定
+            courseTasks.forEach(task => {
+              if (tasks[task.id] !== undefined) {
+                if (!progressStructure[userId][courseId].completedTasks) {
+                  progressStructure[userId][courseId].completedTasks = {};
+                }
+                progressStructure[userId][courseId].completedTasks[task.id] = tasks[task.id];
+              }
+            });
+          });
+        });
+        
+        console.log('ローカルストレージからのデータ読み込み完了');
+      }
+      
+      setProgressData(progressStructure);
+    } catch (error) {
+      console.error('進捗データ取得エラー:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // 初期データロード
+  useEffect(() => {
+    const loadData = async () => {
+      const { tasksByGroup } = await fetchCoursesAndTasks();
+      await fetchProgress(tasksByGroup);
+    };
+
+    loadData();
+  }, [fetchCoursesAndTasks, fetchProgress]);
+
+  // コース追加
+  const addCourse = async (course) => {
+    try {
+      const newCourse = {
+        title: course.title,
+        description: course.description || '',
+        category: course.category || 'other'
+      };
+      
+      const { data, error } = await supabase
+        .from('courses')
+        .insert([newCourse])
+        .select();
+      
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        setCourses(prev => [...prev, data[0]]);
+        return data[0];
+      }
+    } catch (error) {
+      console.error('コース追加エラー:', error);
+      return null;
+    }
+  };
+
+  // タスク追加
+  const addTask = async (courseId, task) => {
+    try {
+      console.log('タスク追加開始:', { courseId, task });
+      
+      // オンラインモードで試行
+      try {
+        console.log('Supabaseでタスク追加を試行します...');
+        
+        const { data, error } = await supabase
+          .from('tasks')
+          .insert([{
+            course_id: courseId,
+            title: task.title
+          }])
+          .select();
+        
+        if (error) {
+          console.error('Supabaseタスク追加エラー:', error.message);
+          throw error;
+        }
+        
+        if (data && data.length > 0) {
+          console.log('Supabaseタスク追加成功');
+          updateLocalTasks(courseId, data[0]);
+          return {
+            id: data[0].id,
+            title: data[0].title,
+            createdAt: data[0].created_at
+          };
+        }
+      } catch (supabaseError) {
+        console.error('Supabase例外:', supabaseError.message);
+        // Supabase接続に失敗した場合、ローカルストレージを使用
+        console.log('ローカルストレージを使用してタスクを追加します');
+        
+        // ローカルモードでタスク追加
+        const newTaskId = Date.now().toString(); // 一意のIDを生成
+        const newTaskData = {
+          id: newTaskId,
+          course_id: courseId,
+          title: task.title,
+          created_at: new Date().toISOString()
+        };
+        
+        // ローカルストレージから既存のタスクを取得
+        const savedTasks = localStorage.getItem('app_tasks') || '{}';
+        const parsedTasks = JSON.parse(savedTasks);
+        
+        // 新しいタスクを追加
+        const courseTasks = parsedTasks[courseId] || [];
+        const updatedCourseTasks = [...courseTasks, newTaskData];
+        
+        // 更新したタスクをローカルストレージに保存
+        const updatedTasks = {
+          ...parsedTasks,
+          [courseId]: updatedCourseTasks
+        };
+        localStorage.setItem('app_tasks', JSON.stringify(updatedTasks));
+        
+        // UIの状態も更新
+        updateLocalTasks(courseId, newTaskData);
+        
+        return {
+          id: newTaskId,
+          title: newTaskData.title,
+          createdAt: newTaskData.created_at
+        };
+      }
+    } catch (error) {
+      console.error('タスク追加例外:', error);
+      
+      // ユーザーに通知
+      alert(`タスク追加エラー: ${error.message || 'タスク追加に失敗しました'}`);
+      
+      return null;
+    }
+  };
+  
+  // ローカルのタスク状態を更新するヘルパー関数
+  const updateLocalTasks = (courseId, newTask) => {
+    setTasks(prev => {
+      const courseTasks = prev[courseId] || [];
+      return {
+        ...prev,
+        [courseId]: [...courseTasks, {
+          id: newTask.id,
+          title: newTask.title,
+          createdAt: newTask.created_at
+        }]
+      };
+    });
+  };
+
+  // タスク完了状態の設定
+  const setUserTaskCompletion = async (userId, courseId, taskId, isCompleted) => {
+    try {
+      console.log('タスク完了状態の設定を開始', { userId, courseId, taskId, isCompleted });
+      
+      // オンラインモードで試行
+      try {
+        // 既存のデータを確認
+        const { data: existingData, error: checkError } = await supabase
+          .from('task_completions')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('task_id', taskId)
+          .single();
+        
+        if (checkError && checkError.code !== 'PGRST116') {
+          console.error('データベース接続エラー:', checkError.message);
+          throw checkError;
+        }
+        
+        let result;
+        
+        if (existingData) {
+          // 既存データの更新
+          const { data, error } = await supabase
+            .from('task_completions')
+            .update({ completed: isCompleted })
+            .eq('user_id', userId)
+            .eq('task_id', taskId)
+            .select();
+          
+          if (error) {
+            console.error('データ更新エラー:', error.message);
+            throw error;
+          }
+          result = data;
+        } else {
+          // 新規データの挿入
+          const { data, error } = await supabase
+            .from('task_completions')
+            .insert([{
+              user_id: userId,
+              task_id: taskId,
+              completed: isCompleted
+            }])
+            .select();
+          
+          if (error) {
+            console.error('データ挿入エラー:', error.message);
+            throw error;
+          }
+          result = data;
+        }
+        
+        // 進捗率の計算
+        const courseTasks = tasks[courseId] || [];
+        const completedTasksQuery = await supabase
+          .from('task_completions')
+          .select('*')
+          .eq('user_id', userId)
+          .in('task_id', courseTasks.map(task => task.id))
+          .eq('completed', true);
+        
+        if (completedTasksQuery.error) {
+          console.error('データ取得エラー:', completedTasksQuery.error.message);
+          throw completedTasksQuery.error;
+        }
+        
+        const completedCount = completedTasksQuery.data?.length || 0;
+        const progress = courseTasks.length > 0 
+          ? Math.round((completedCount / courseTasks.length) * 100) 
+          : 0;
+        
+        // コース進捗の更新/作成
+        const { data: progressCheckData, error: progressCheckError } = await supabase
+          .from('course_progress')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('course_id', courseId)
+          .single();
+        
+        if (progressCheckError && progressCheckError.code !== 'PGRST116') {
+          console.error('進捗確認エラー:', progressCheckError.message);
+          throw progressCheckError;
+        }
+        
+        if (progressCheckData) {
+          const { error: updateError } = await supabase
+            .from('course_progress')
+            .update({ progress })
+            .eq('user_id', userId)
+            .eq('course_id', courseId);
+            
+          if (updateError) {
+            console.error('進捗更新エラー:', updateError.message);
+            throw updateError;
+          }
+        } else {
+          const { error: insertError } = await supabase
+            .from('course_progress')
+            .insert([{
+              user_id: userId,
+              course_id: courseId,
+              progress
+            }]);
+            
+          if (insertError) {
+            console.error('進捗挿入エラー:', insertError.message);
+            throw insertError;
+          }
+        }
+
+        console.log('Supabaseでのタスク完了状態更新に成功', { isCompleted, progress });
+      } catch (supabaseError) {
+        console.error('Supabaseでのタスク更新エラー:', supabaseError.message);
+        
+        // ローカルストレージを使用してタスク完了状態を更新
+        console.log('ローカルストレージを使用してタスク完了状態を更新します');
+
+        // ローカルストレージからデータ取得
+        let localTaskCompletions = JSON.parse(localStorage.getItem('app_task_completions') || '{}');
+        if (!localTaskCompletions[userId]) {
+          localTaskCompletions[userId] = {};
+        }
+        
+        // タスク完了状態を更新
+        localTaskCompletions[userId][taskId] = isCompleted;
+        localStorage.setItem('app_task_completions', JSON.stringify(localTaskCompletions));
+        
+        // ローカルでの進捗率計算
+        const courseTasks = tasks[courseId] || [];
+        const completedTasks = courseTasks.filter(task => {
+          return localTaskCompletions[userId]?.[task.id] === true;
+        });
+        
+        const progress = courseTasks.length > 0 
+          ? Math.round((completedTasks.length / courseTasks.length) * 100) 
+          : 0;
+        
+        console.log('進捗率を計算しました（ローカル）:', {
+          completedTasks: completedTasks.length,
+          totalTasks: courseTasks.length,
+          progress: progress
+        });
+        
+        // ローカルストレージに進捗保存
+        let localProgress = JSON.parse(localStorage.getItem('app_course_progress') || '{}');
+        if (!localProgress[userId]) {
+          localProgress[userId] = {};
+        }
+        
+        localProgress[userId][courseId] = progress;
+        localStorage.setItem('app_course_progress', JSON.stringify(localProgress));
+        
+        console.log('ローカルストレージでのタスク完了状態更新完了', { isCompleted, progress });
+      }
+      
+      // ローカルの進捗データを更新
+      setProgressData(prev => {
+        // ユーザーの進捗データ取得
+        const userData = prev[userId] || {};
+        
+        // コースの進捗データ取得
+        const courseProgress = userData[courseId] || {
+          completedTasks: {},
+          progress: 0
+        };
+        
+        // タスクの完了状態を更新
+        const updatedCompletedTasks = {
+          ...courseProgress.completedTasks,
+          [taskId]: isCompleted
+        };
+        
+        // タスク完了数からの進捗率の再計算
+        const courseTasks = tasks[courseId] || [];
+        const completedTasksCount = courseTasks.filter(task => 
+          updatedCompletedTasks[task.id] === true
+        ).length;
+        
+        const updatedProgress = courseTasks.length > 0 
+          ? Math.round((completedTasksCount / courseTasks.length) * 100) 
+          : 0;
+        
+        // 更新された進捗データを返す
+        return {
+          ...prev,
+          [userId]: {
+            ...userData,
+            [courseId]: {
+              completedTasks: updatedCompletedTasks,
+              progress: updatedProgress
+            }
+          }
+        };
+      });
+      
+      return true;
+    } catch (error) {
+      console.error('タスク完了状態設定エラー:', error);
+      return false;
+    }
+  };
+
+  // ユーザーのタスク完了状態を切り替え
+  const toggleUserTaskCompletion = async (userId, courseId, taskId) => {
+    // 現在の完了状態を取得
+    const userData = progressData[userId] || {};
+    const courseProgress = userData[courseId] || { completedTasks: {} };
+    const isCurrentlyCompleted = courseProgress.completedTasks[taskId] || false;
+    
+    // 逆の状態に切り替え
+    return await setUserTaskCompletion(userId, courseId, taskId, !isCurrentlyCompleted);
+  };
+
+  // ユーザーのコース進捗を取得
+  const getUserProgress = (userId, courseId) => {
+    const userData = progressData[userId] || {};
+    const courseProgress = userData[courseId] || { progress: 0 };
+    return courseProgress.progress;
+  };
+
+  // ユーザーのタスク完了状態を取得
+  const isTaskCompletedByUser = (userId, courseId, taskId) => {
+    const userData = progressData[userId] || {};
+    const courseProgress = userData[courseId] || { completedTasks: {} };
+    return courseProgress.completedTasks[taskId] || false;
+  };
+
+  // 全ユーザーの平均進捗率を取得
+  const getAverageProgress = (courseId) => {
+    const userIds = Object.keys(progressData);
+    if (userIds.length === 0) return 0;
+    
+    const totalProgress = userIds.reduce((sum, userId) => {
+      const userData = progressData[userId] || {};
+      const courseProgress = userData[courseId] || { progress: 0 };
+      return sum + courseProgress.progress;
+    }, 0);
+    
+    return Math.round(totalProgress / userIds.length);
+  };
+
+  // コースとそのタスクを結合したデータを作成（順序付き）
+  const getCoursesWithTasks = () => {
+    // コース順序に従ってコースを並び替え
+    const debugOutput = false; // trueにするとデバッグログを出力
+    if (debugOutput) {
+      console.log('getCoursesWithTasks(): コース順序とコース一覧', {
+        courseOrder: courseOrder,
+        courses: courses.map(c => ({ id: c.id, title: c.title }))
+      });
+    }
+    
+    const orderedCourses = [...courses].sort((a, b) => {
+      const indexA = courseOrder.indexOf(a.id);
+      const indexB = courseOrder.indexOf(b.id);
+      // 順序リストに含まれていない場合は末尾に配置
+      return (indexA === -1 ? 9999 : indexA) - (indexB === -1 ? 9999 : indexB);
+    });
+    
+    // デバッグ情報として順序を出力
+    console.log('表示用に並び替えたコース順序:', orderedCourses.map(c => c.title));
+    
+    return orderedCourses.map(course => ({
+      ...course,
+      tasks: tasks[course.id] || []
+    }));
+  };
+
+  // コース順序の並び替え
+  const reorderCourses = async (startIndex, endIndex) => {
+    try {
+      console.log('reorderCourses関数が呼び出されました', { startIndex, endIndex });
+      
+      // インデックスのバリデーションチェック
+      if (startIndex < 0 || startIndex >= courses.length || endIndex < 0 || endIndex >= courses.length) {
+        console.error('並び替えエラー: インデックスが範囲外です', { startIndex, endIndex, coursesLength: courses.length });
+        return false;
+      }
+      
+      console.log('並び替え実行:', { 
+        startIndex, 
+        endIndex, 
+        startIndexType: typeof startIndex,
+        endIndexType: typeof endIndex,
+        moveDirection: startIndex < endIndex ? '下へ移動' : '上へ移動',
+        itemsCount: courses.length
+      });
+      
+      // 数値型に強制変換
+      const numStartIndex = Number(startIndex);
+      const numEndIndex = Number(endIndex);
+      
+      if (isNaN(numStartIndex) || isNaN(numEndIndex)) {
+        console.error('並び替えエラー: インデックスが数値に変換できません', { startIndex, endIndex });
+        return false;
+      }
+      
+      // 現在の順序付きコースリストを取得（表示順）
+      const orderedCoursesWithTasks = getCoursesWithTasks();
+      
+      // 移動対象と移動先のコース情報をログ出力（デバッグ用）
+      const sourceItem = orderedCoursesWithTasks[numStartIndex];
+      if (!sourceItem) {
+        console.error('並び替えエラー: 移動元のコースが見つかりません', { index: numStartIndex });
+        return false;
+      }
+      console.log('移動元コース:', { index: numStartIndex, id: sourceItem.id, title: sourceItem.title });
+      
+      const targetItem = orderedCoursesWithTasks[numEndIndex];
+      if (!targetItem) {
+        console.error('並び替えエラー: 移動先のコースが見つかりません', { index: numEndIndex });
+        return false;
+      }
+      console.log('移動先位置のコース:', { index: numEndIndex, id: targetItem.id, title: targetItem.title });
+      
+      // 実際の順序変更処理
+      // 1. 表示順に基づいたコースIDの配列を作成
+      const currentOrderedIds = orderedCoursesWithTasks.map(course => course.id);
+      console.log('並び替え前の順序 (表示順):', JSON.stringify(currentOrderedIds));
+      
+      // 2. 移動元の要素を取得
+      const movedItemId = currentOrderedIds[numStartIndex];
+      
+      // 3. 新しい順序を作成（安全に配列を複製）
+      let newOrder = [...currentOrderedIds];
+      
+      // 4. 元の配列から要素を削除
+      newOrder.splice(numStartIndex, 1);
+      
+      // 5. 対象の位置に要素を挿入
+      // 下への移動の場合、既に元の要素を削除したので、挿入位置を-1する必要がある
+      const insertPosition = numEndIndex > numStartIndex ? numEndIndex - 1 : numEndIndex;
+      newOrder.splice(insertPosition, 0, movedItemId);
+      
+      // 6. 順序が実際に変更されたか確認（デバッグ用）
+      const isOrderChanged = JSON.stringify(currentOrderedIds) !== JSON.stringify(newOrder);
+      console.log('順序は変更されましたか？', isOrderChanged);
+      if (!isOrderChanged) {
+        console.error('順序変更エラー: 並び替え前後で順序が同じです。処理を確認してください。');
+        // 別のアプローチで順序を変更してみる
+        newOrder = [...currentOrderedIds];
+        newOrder[numStartIndex] = currentOrderedIds[numEndIndex];
+        newOrder[numEndIndex] = currentOrderedIds[numStartIndex];
+        console.log('代替方法での並び替え後:', JSON.stringify(newOrder));
+      }
+      
+      console.log('並び替え後の順序:', JSON.stringify(newOrder));
+      
+      // 7. 新しい順序を設定
+      setCourseOrder(newOrder);
+      
+      // 8. ローカルストレージに保存
+      localStorage.setItem('app_course_order', JSON.stringify(newOrder));
+      
+      // 9. 並び替えの結果をコンソールに出力
+      console.log('新しい順序に基づくコース一覧:',
+        newOrder.map(id => {
+          const course = courses.find(c => c.id === id);
+          return course ? course.title : `不明(${id})`;
+        })
+      );
+      
+      // 10. コース自体も再ソートした状態更新を行う（順序を確実に反映）
+      const orderedCourses = [...courses].sort((a, b) => {
+        const indexA = newOrder.indexOf(a.id);
+        const indexB = newOrder.indexOf(b.id);
+        return (indexA === -1 ? 9999 : indexA) - (indexB === -1 ? 9999 : indexB);
+      });
+      
+      console.log('並び替え後のコース順序を確認:', orderedCourses.map(c => c.title));
+      
+      // 11. コース状態を強制的に更新
+      setCourses(orderedCourses);
+      
+      // 12. わざと少し待機して、UIの更新を確実にする
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      return true;
+    } catch (error) {
+      console.error('コース並び替えエラー:', error);
+      return false;
+    }
+  };
+
+  // コース編集
+  const updateCourse = async (courseId, updates) => {
+    try {
+      // オンラインモードで試行
+      try {
+        const { data, error } = await supabase
+          .from('courses')
+          .update({
+            title: updates.title,
+            description: updates.description || '',
+            category: updates.category || 'other'
+          })
+          .eq('id', courseId)
+          .select();
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          // コース一覧を更新
+          setCourses(prev => 
+            prev.map(course => course.id === courseId ? data[0] : course)
+          );
+          return data[0];
+        }
+      } catch (supabaseError) {
+        console.error('Supabaseでのコース更新エラー:', supabaseError.message);
+        
+        // ローカルストレージを使用してコースを更新
+        let localCourses = JSON.parse(localStorage.getItem('app_courses') || '[]');
+        const updatedLocalCourses = localCourses.map(course => {
+          if (course.id === courseId) {
+            return {
+              ...course,
+              title: updates.title,
+              description: updates.description || '',
+              category: updates.category || 'other'
+            };
+          }
+          return course;
+        });
+        
+        localStorage.setItem('app_courses', JSON.stringify(updatedLocalCourses));
+        
+        // コース一覧を更新
+        setCourses(prev => 
+          prev.map(course => {
+            if (course.id === courseId) {
+              return {
+                ...course,
+                title: updates.title,
+                description: updates.description || '',
+                category: updates.category || 'other'
+              };
+            }
+            return course;
+          })
+        );
+        
+        // 更新されたコースを返す
+        return courses.find(course => course.id === courseId);
+      }
+    } catch (error) {
+      console.error('コース更新エラー:', error);
+      return null;
+    }
+  };
+
+  // コース削除
+  const deleteCourse = async (courseId) => {
+    try {
+      // オンラインモードで試行
+      try {
+        // まずタスクを削除
+        const { error: tasksError } = await supabase
+          .from('tasks')
+          .delete()
+          .eq('course_id', courseId);
+          
+        if (tasksError) throw tasksError;
+        
+        // 次に進捗データを削除
+        const { error: progressError } = await supabase
+          .from('course_progress')
+          .delete()
+          .eq('course_id', courseId);
+          
+        if (progressError) throw progressError;
+        
+        // 最後にコースを削除
+        const { error: courseError } = await supabase
+          .from('courses')
+          .delete()
+          .eq('id', courseId);
+          
+        if (courseError) throw courseError;
+        
+        // 成功した場合、ローカルの状態を更新
+        setCourses(prev => prev.filter(course => course.id !== courseId));
+        setTasks(prev => {
+          const newTasks = { ...prev };
+          delete newTasks[courseId];
+          return newTasks;
+        });
+        
+        // 進捗データも更新
+        setProgressData(prev => {
+          const newProgress = { ...prev };
+          Object.keys(newProgress).forEach(userId => {
+            if (newProgress[userId][courseId]) {
+              delete newProgress[userId][courseId];
+            }
+          });
+          return newProgress;
+        });
+        
+        return true;
+      } catch (supabaseError) {
+        console.error('Supabaseでのコース削除エラー:', supabaseError.message);
+        
+        // ローカルストレージを使用してコースを削除
+        let localCourses = JSON.parse(localStorage.getItem('app_courses') || '[]');
+        const filteredLocalCourses = localCourses.filter(course => course.id !== courseId);
+        localStorage.setItem('app_courses', JSON.stringify(filteredLocalCourses));
+        
+        // ローカルのタスクデータも削除
+        let localTasks = JSON.parse(localStorage.getItem('app_tasks') || '{}');
+        delete localTasks[courseId];
+        localStorage.setItem('app_tasks', JSON.stringify(localTasks));
+        
+        // ローカルの進捗データも削除
+        let localProgress = JSON.parse(localStorage.getItem('app_course_progress') || '{}');
+        Object.keys(localProgress).forEach(userId => {
+          if (localProgress[userId] && localProgress[userId][courseId]) {
+            delete localProgress[userId][courseId];
+          }
+        });
+        localStorage.setItem('app_course_progress', JSON.stringify(localProgress));
+        
+        // ローカルの完了タスクデータも削除
+        let localCompletions = JSON.parse(localStorage.getItem('app_task_completions') || '{}');
+        Object.keys(localCompletions).forEach(userId => {
+          if (localCompletions[userId]) {
+            const courseTasks = tasks[courseId] || [];
+            courseTasks.forEach(task => {
+              if (localCompletions[userId][task.id]) {
+                delete localCompletions[userId][task.id];
+              }
+            });
+          }
+        });
+        localStorage.setItem('app_task_completions', JSON.stringify(localCompletions));
+        
+        // ローカルの状態を更新
+        setCourses(prev => prev.filter(course => course.id !== courseId));
+        setTasks(prev => {
+          const newTasks = { ...prev };
+          delete newTasks[courseId];
+          return newTasks;
+        });
+        
+        // 進捗データも更新
+        setProgressData(prev => {
+          const newProgress = { ...prev };
+          Object.keys(newProgress).forEach(userId => {
+            if (newProgress[userId] && newProgress[userId][courseId]) {
+              delete newProgress[userId][courseId];
+            }
+          });
+          return newProgress;
+        });
+        
+        return true;
+      }
+    } catch (error) {
+      console.error('コース削除エラー:', error);
+      return false;
+    }
+  };
+
+  // タスク編集
+  const updateTask = async (courseId, taskId, updates) => {
+    try {
+      // オンラインモードで試行
+      try {
+        const { data, error } = await supabase
+          .from('tasks')
+          .update({
+            title: updates.title
+          })
+          .eq('id', taskId)
+          .select();
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          // ローカルのタスクデータも更新
+          setTasks(prev => {
+            const courseTasks = [...(prev[courseId] || [])];
+            const taskIndex = courseTasks.findIndex(task => task.id === taskId);
+            
+            if (taskIndex !== -1) {
+              courseTasks[taskIndex] = {
+                ...courseTasks[taskIndex],
+                title: updates.title
+              };
+            }
+            
+            return {
+              ...prev,
+              [courseId]: courseTasks
+            };
+          });
+          
+          return data[0];
+        }
+      } catch (supabaseError) {
+        console.error('Supabaseでのタスク更新エラー:', supabaseError.message);
+        
+        // ローカルストレージを使用してタスクを更新
+        let localTasks = JSON.parse(localStorage.getItem('app_tasks') || '{}');
+        const courseTasks = localTasks[courseId] || [];
+        const updatedCourseTasks = courseTasks.map(task => {
+          if (task.id === taskId) {
+            return {
+              ...task,
+              title: updates.title
+            };
+          }
+          return task;
+        });
+        
+        localTasks[courseId] = updatedCourseTasks;
+        localStorage.setItem('app_tasks', JSON.stringify(localTasks));
+        
+        // UIの状態も更新
+        setTasks(prev => {
+          const courseTasks = [...(prev[courseId] || [])];
+          const taskIndex = courseTasks.findIndex(task => task.id === taskId);
+          
+          if (taskIndex !== -1) {
+            courseTasks[taskIndex] = {
+              ...courseTasks[taskIndex],
+              title: updates.title
+            };
+          }
+          
+          return {
+            ...prev,
+            [courseId]: courseTasks
+          };
+        });
+        
+        return { id: taskId, title: updates.title };
+      }
+    } catch (error) {
+      console.error('タスク更新エラー:', error);
+      return null;
+    }
+  };
+
+  // タスク削除
+  const deleteTask = async (courseId, taskId) => {
+    try {
+      // オンラインモードで試行
+      try {
+        // タスク完了状態を削除
+        const { error: completionsError } = await supabase
+          .from('task_completions')
+          .delete()
+          .eq('task_id', taskId);
+          
+        if (completionsError) throw completionsError;
+        
+        // タスクを削除
+        const { error: taskError } = await supabase
+          .from('tasks')
+          .delete()
+          .eq('id', taskId);
+          
+        if (taskError) throw taskError;
+        
+        // ローカルの状態を更新
+        setTasks(prev => {
+          const courseTasks = [...(prev[courseId] || [])];
+          const updatedTasks = courseTasks.filter(task => task.id !== taskId);
+          
+          return {
+            ...prev,
+            [courseId]: updatedTasks
+          };
+        });
+        
+        // 進捗データも更新
+        setProgressData(prev => {
+          const newProgressData = { ...prev };
+          
+          Object.keys(newProgressData).forEach(userId => {
+            if (newProgressData[userId]?.[courseId]?.completedTasks) {
+              const { [taskId]: removedTask, ...remainingTasks } = newProgressData[userId][courseId].completedTasks;
+              newProgressData[userId][courseId].completedTasks = remainingTasks;
+              
+              // 進捗率も再計算
+              const courseTasks = tasks[courseId] || [];
+              const remainingCourseTasks = courseTasks.filter(task => task.id !== taskId);
+              const completedTasksCount = Object.values(remainingTasks).filter(Boolean).length;
+              
+              const progress = remainingCourseTasks.length > 0
+                ? Math.round((completedTasksCount / remainingCourseTasks.length) * 100)
+                : 0;
+              
+              newProgressData[userId][courseId].progress = progress;
+            }
+          });
+          
+          return newProgressData;
+        });
+        
+        return true;
+      } catch (supabaseError) {
+        console.error('Supabaseでのタスク削除エラー:', supabaseError.message);
+        
+        // ローカルストレージを使用してタスクを削除
+        let localTasks = JSON.parse(localStorage.getItem('app_tasks') || '{}');
+        const courseTasks = localTasks[courseId] || [];
+        const updatedCourseTasks = courseTasks.filter(task => task.id !== taskId);
+        
+        localTasks[courseId] = updatedCourseTasks;
+        localStorage.setItem('app_tasks', JSON.stringify(localTasks));
+        
+        // タスク完了状態からも削除
+        let localCompletions = JSON.parse(localStorage.getItem('app_task_completions') || '{}');
+        Object.keys(localCompletions).forEach(userId => {
+          if (localCompletions[userId] && localCompletions[userId][taskId]) {
+            delete localCompletions[userId][taskId];
+          }
+        });
+        localStorage.setItem('app_task_completions', JSON.stringify(localCompletions));
+        
+        // 進捗データも更新
+        let localProgress = JSON.parse(localStorage.getItem('app_course_progress') || '{}');
+        Object.keys(localProgress).forEach(userId => {
+          if (localProgress[userId]?.[courseId]) {
+            // 進捗率を再計算
+            const userCompletions = localCompletions[userId] || {};
+            const remainingCourseTasks = (localTasks[courseId] || []);
+            const completedCount = remainingCourseTasks.filter(task => userCompletions[task.id] === true).length;
+            
+            const progress = remainingCourseTasks.length > 0
+              ? Math.round((completedCount / remainingCourseTasks.length) * 100)
+              : 0;
+            
+            localProgress[userId][courseId] = progress;
+          }
+        });
+        localStorage.setItem('app_course_progress', JSON.stringify(localProgress));
+        
+        // UIの状態も更新
+        setTasks(prev => {
+          const courseTasks = [...(prev[courseId] || [])];
+          const updatedTasks = courseTasks.filter(task => task.id !== taskId);
+          
+          return {
+            ...prev,
+            [courseId]: updatedTasks
+          };
+        });
+        
+        // 進捗データも更新（UI用）
+        setProgressData(prev => {
+          const newProgressData = { ...prev };
+          
+          Object.keys(newProgressData).forEach(userId => {
+            if (newProgressData[userId]?.[courseId]?.completedTasks) {
+              const { [taskId]: removedTask, ...remainingTasks } = newProgressData[userId][courseId].completedTasks;
+              newProgressData[userId][courseId].completedTasks = remainingTasks;
+              
+              // 進捗率も再計算
+              const courseTasks = tasks[courseId] || [];
+              const remainingCourseTasks = courseTasks.filter(task => task.id !== taskId);
+              const completedTasksCount = Object.values(remainingTasks).filter(Boolean).length;
+              
+              const progress = remainingCourseTasks.length > 0
+                ? Math.round((completedTasksCount / remainingCourseTasks.length) * 100)
+                : 0;
+              
+              newProgressData[userId][courseId].progress = progress;
+            }
+          });
+          
+          return newProgressData;
+        });
+        
+        return true;
+      }
+    } catch (error) {
+      console.error('タスク削除エラー:', error);
+      return false;
+    }
+  };
+
+  return (
+    <SharedDataContext.Provider value={{
+      courses,
+      tasks,
+      progressData,
+      addCourse,
+      addTask,
+      updateCourse,
+      deleteCourse,
+      updateTask,
+      deleteTask,
+      setUserTaskCompletion,
+      toggleUserTaskCompletion,
+      getUserProgress,
+      isTaskCompletedByUser,
+      getAverageProgress,
+      getCoursesWithTasks,
+      reorderCourses,
+      loading,
+      fetchCoursesAndTasks
+    }}>
+      {children}
+    </SharedDataContext.Provider>
+  );
+};
+
+export default SharedDataContext;

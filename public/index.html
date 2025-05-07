@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta
+      name="description"
+      content="学習進捗を管理するためのウェブアプリケーション"
+    />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    <title>学習進捗管理アプリ</title>
+    <style>
+      /* 並び替え関連のスタイル */
+      .order-button {
+        transition: background-color 0.2s ease;
+        cursor: pointer;
+      }
+      .order-button:hover {
+        background-color: #e0e0e0 !important;
+      }
+      
+      /* 選択中のアイテム */
+      .selected-course {
+        box-shadow: 0 5px 15px rgba(0,0,0,0.2) !important;
+        z-index: 100;
+        position: relative;
+      }
+      
+      /* タスク項目のスタイル */
+      .task-item {
+        user-select: none;
+        transition: all 0.2s ease;
+      }
+      
+      .task-item:hover {
+        background-color: #f9f9f9 !important;
+      }
+      
+      .task-item.selected {
+        background-color: rgba(76, 175, 80, 0.05) !important;
+        border: 1px dashed #4caf50 !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2) !important;
+      }
+      
+      /* コースアイテムの基本スタイル */
+      .course-item {
+        transition: all 0.2s ease;
+        user-select: none;
+      }
+      
+      /* コース一覧コンテナ */
+      .courses-container {
+        position: relative;
+      }
+    </style>
+  </head>
+  <body>
+    <noscript>このアプリを実行するにはJavaScriptを有効にしてください。</noscript>
+    <div id="root"></div>
+  </body>
+</html>
