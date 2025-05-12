@@ -297,7 +297,11 @@ function AuthGuardedApp() {
   }
 
   // 認証済みなら本体を表示
-  return <Main />;
+  return (
+    <UserProvider>
+      <Main />
+    </UserProvider>
+  );
 }
 
 export default AuthGuardedApp;
