@@ -277,8 +277,12 @@ function AuthGuardedApp() {
   const [showSignup, setShowSignup] = useState(false);
 
   useEffect(() => {
-    setSession(supabase.auth.session());
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    // 初回にセッションを取得
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+    // 状態変化のリスナー
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, { session }) => {
       setSession(session);
     });
     return () => listener.subscription.unsubscribe();
@@ -287,7 +291,9 @@ function AuthGuardedApp() {
   if (!session) {
     return showSignup
       ? <Signup onSignup={() => setShowSignup(false)} onSwitch={() => setShowSignup(false)} />
-      : <Login onLogin={() => setSession(supabase.auth.session())} onSwitch={() => setShowSignup(true)} />;
+      : <Login onLogin={() => {
+          supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
+        }} onSwitch={() => setShowSignup(true)} />;
   }
 
   // 認証済みなら本体を表示
