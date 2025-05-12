@@ -183,15 +183,21 @@ export const SharedDataProvider = ({ children }) => {
   const fetchProgress = useCallback(async (taskData) => {
     try {
       let progressStructure = {};
-      
+      if (!taskData) {
+        setProgressData({});
+        return;
+      }
       try {
         // Supabaseからのデータ取得を試みる
         // タスク完了状態
         const { data: completions, error: completionsError } = await supabase
           .from('task_completions')
           .select('*');
-        
         if (completionsError) throw completionsError;
+        if (!completions) {
+          setProgressData({});
+          return;
+        }
         
         // コース進捗
         const { data: progress, error: progressError } = await supabase
@@ -243,60 +249,13 @@ export const SharedDataProvider = ({ children }) => {
         console.log('Supabaseからの進捗データ取得成功');
       } catch (supabaseError) {
         console.error('Supabaseからの進捗データ取得エラー:', supabaseError.message);
-        console.log('ローカルストレージからデータを読み込みます');
-        
-        // ローカルストレージからデータ取得
-        const localTaskCompletions = JSON.parse(localStorage.getItem('app_task_completions') || '{}');
-        const localProgress = JSON.parse(localStorage.getItem('app_course_progress') || '{}');
-        
-        // ローカルデータを進捗構造に変換
-        Object.entries(localTaskCompletions).forEach(([userId, tasks]) => {
-          if (!progressStructure[userId]) {
-            progressStructure[userId] = {};
-          }
-          
-          // コースごとの進捗率を計算
-          Object.entries(taskData).forEach(([courseId, courseTasks]) => {
-            // このコースのタスク完了状況を確認
-            const completedTasksForCourse = courseTasks.filter(task => 
-              tasks[task.id] === true
-            );
-            
-            const progress = courseTasks.length > 0
-              ? Math.round((completedTasksForCourse.length / courseTasks.length) * 100)
-              : 0;
-            
-            // ローカル計算した進捗率または保存されていた進捗率を使用
-            const storedProgress = localProgress[userId]?.[courseId];
-            const finalProgress = storedProgress !== undefined ? storedProgress : progress;
-            
-            if (!progressStructure[userId][courseId]) {
-              progressStructure[userId][courseId] = {
-                completedTasks: {},
-                progress: finalProgress
-              };
-            } else {
-              progressStructure[userId][courseId].progress = finalProgress;
-            }
-            
-            // このコースのタスク完了状態を設定
-            courseTasks.forEach(task => {
-              if (tasks[task.id] !== undefined) {
-                if (!progressStructure[userId][courseId].completedTasks) {
-                  progressStructure[userId][courseId].completedTasks = {};
-                }
-                progressStructure[userId][courseId].completedTasks[task.id] = tasks[task.id];
-              }
-            });
-          });
-        });
-        
-        console.log('ローカルストレージからのデータ読み込み完了');
+        setProgressData({});
+        return;
       }
-      
       setProgressData(progressStructure);
     } catch (error) {
       console.error('進捗データ取得エラー:', error);
+      setProgressData({});
     } finally {
       setLoading(false);
     }
