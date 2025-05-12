@@ -278,8 +278,8 @@ function AuthGuardedApp() {
 
   useEffect(() => {
     // 初回にセッションを取得
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
+    supabase.auth.getSession().then((result) => {
+      setSession(result?.data?.session ?? null);
     });
     // 状態変化のリスナー
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
