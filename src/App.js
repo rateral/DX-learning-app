@@ -299,7 +299,9 @@ function AuthGuardedApp() {
   // 認証済みなら本体を表示
   return (
     <UserProvider>
-      <Main />
+      <SharedDataProvider>
+        <Main />
+      </SharedDataProvider>
     </UserProvider>
   );
 }
