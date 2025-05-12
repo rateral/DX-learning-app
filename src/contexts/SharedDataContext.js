@@ -133,17 +133,20 @@ export const SharedDataProvider = ({ children }) => {
       
       if (tasksError) throw tasksError;
       
-      // タスクをコースIDでグループ化
+      // タスクをコースIDでグループ化（ID重複を除外）
       const tasksByGroup = tasksData?.reduce((acc, task) => {
         const courseId = task.course_id;
         if (!acc[courseId]) {
           acc[courseId] = [];
         }
-        acc[courseId].push({
-          id: task.id,
-          title: task.title,
-          createdAt: task.created_at
-        });
+        // すでに同じIDのタスクが入っていないかチェック
+        if (!acc[courseId].some(t => t.id === task.id)) {
+          acc[courseId].push({
+            id: task.id,
+            title: task.title,
+            createdAt: task.created_at
+          });
+        }
         return acc;
       }, {}) || {};
       
@@ -397,15 +400,23 @@ export const SharedDataProvider = ({ children }) => {
   // タスク追加
   const addTask = async (courseId, task) => {
     try {
-      console.log('タスク追加開始:', { courseId, task });
+      // 追加前に重複チェック
+      const { data: existingTasks, error: checkError } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('course_id', courseId)
+        .eq('title', task.title);
+      if (checkError) throw checkError;
+      if (existingTasks && existingTasks.length > 0) {
+        alert('同じタイトルの課題が既に存在します');
+        return null;
+      }
       // Supabaseでタスク追加
       const { data, error } = await supabase
         .from('tasks')
         .insert([{ course_id: courseId, title: task.title }])
         .select();
       if (error) throw error;
-      // タスク順序データの確認・作成（省略せず既存ロジックを維持）
-      // ... 既存の順序データ確認・作成処理 ...
       // タスク追加後に必ず全体を再取得
       await fetchCoursesAndTasks();
       return data && data.length > 0 ? { id: data[0].id, title: data[0].title, createdAt: data[0].created_at } : null;
