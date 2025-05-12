@@ -282,8 +282,8 @@ function AuthGuardedApp() {
       setSession(session);
     });
     // 状態変化のリスナー
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, payload = {}) => {
+      setSession(payload.session);
     });
     return () => listener.subscription.unsubscribe();
   }, []);
