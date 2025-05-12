@@ -133,9 +133,9 @@ export const SharedDataProvider = ({ children }) => {
       
       if (tasksError) throw tasksError;
       
-      // タスクをコースIDでグループ化（ID重複を除外）
+      // タスクをコースIDでグループ化（ID重複を除外、courseIdをstring化）
       const tasksByGroup = tasksData?.reduce((acc, task) => {
-        const courseId = task.course_id;
+        const courseId = String(task.course_id);
         if (!acc[courseId]) {
           acc[courseId] = [];
         }
@@ -497,7 +497,7 @@ export const SharedDataProvider = ({ children }) => {
         }
         
         // 進捗率の計算
-        const courseTasks = tasks[courseId] || [];
+        const courseTasks = tasks[String(courseId)] || [];
         const completedTasksQuery = await supabase
           .from('task_completions')
           .select('*')
@@ -520,7 +520,7 @@ export const SharedDataProvider = ({ children }) => {
           .from('course_progress')
           .select('*')
           .eq('user_id', userId)
-          .eq('course_id', courseId)
+          .eq('course_id', String(courseId))
           .single();
         
         if (progressCheckError && progressCheckError.code !== 'PGRST116') {
@@ -533,7 +533,7 @@ export const SharedDataProvider = ({ children }) => {
             .from('course_progress')
             .update({ progress })
             .eq('user_id', userId)
-            .eq('course_id', courseId);
+            .eq('course_id', String(courseId));
             
           if (updateError) {
             console.error('進捗更新エラー:', updateError.message);
@@ -544,7 +544,7 @@ export const SharedDataProvider = ({ children }) => {
             .from('course_progress')
             .insert([{
               user_id: userId,
-              course_id: courseId,
+              course_id: String(courseId),
               progress
             }]);
             
@@ -572,7 +572,7 @@ export const SharedDataProvider = ({ children }) => {
         localStorage.setItem('app_task_completions', JSON.stringify(localTaskCompletions));
         
         // ローカルでの進捗率計算
-        const courseTasks = tasks[courseId] || [];
+        const courseTasks = tasks[String(courseId)] || [];
         const completedTasks = courseTasks.filter(task => {
           return localTaskCompletions[userId]?.[task.id] === true;
         });
@@ -593,7 +593,7 @@ export const SharedDataProvider = ({ children }) => {
           localProgress[userId] = {};
         }
         
-        localProgress[userId][courseId] = progress;
+        localProgress[userId][String(courseId)] = progress;
         localStorage.setItem('app_course_progress', JSON.stringify(localProgress));
         
         console.log('ローカルストレージでのタスク完了状態更新完了', { isCompleted, progress });
@@ -605,7 +605,7 @@ export const SharedDataProvider = ({ children }) => {
         const userData = prev[userId] || {};
         
         // コースの進捗データ取得
-        const courseProgress = userData[courseId] || {
+        const courseProgress = userData[String(courseId)] || {
           completedTasks: {},
           progress: 0
         };
@@ -617,7 +617,7 @@ export const SharedDataProvider = ({ children }) => {
         };
         
         // タスク完了数からの進捗率の再計算
-        const courseTasks = tasks[courseId] || [];
+        const courseTasks = tasks[String(courseId)] || [];
         const completedTasksCount = courseTasks.filter(task => 
           updatedCompletedTasks[task.id] === true
         ).length;
@@ -631,7 +631,7 @@ export const SharedDataProvider = ({ children }) => {
           ...prev,
           [userId]: {
             ...userData,
-            [courseId]: {
+            [String(courseId)]: {
               completedTasks: updatedCompletedTasks,
               progress: updatedProgress
             }
@@ -650,7 +650,7 @@ export const SharedDataProvider = ({ children }) => {
   const toggleUserTaskCompletion = async (userId, courseId, taskId) => {
     // 現在の完了状態を取得
     const userData = progressData[userId] || {};
-    const courseProgress = userData[courseId] || { completedTasks: {} };
+    const courseProgress = userData[String(courseId)] || { completedTasks: {} };
     const isCurrentlyCompleted = courseProgress.completedTasks[taskId] || false;
     
     // 逆の状態に切り替え
@@ -660,14 +660,14 @@ export const SharedDataProvider = ({ children }) => {
   // ユーザーのコース進捗を取得
   const getUserProgress = (userId, courseId) => {
     const userData = progressData[userId] || {};
-    const courseProgress = userData[courseId] || { progress: 0 };
+    const courseProgress = userData[String(courseId)] || { progress: 0 };
     return courseProgress.progress;
   };
 
   // ユーザーのタスク完了状態を取得
   const isTaskCompletedByUser = (userId, courseId, taskId) => {
     const userData = progressData[userId] || {};
-    const courseProgress = userData[courseId] || { completedTasks: {} };
+    const courseProgress = userData[String(courseId)] || { completedTasks: {} };
     return courseProgress.completedTasks[taskId] || false;
   };
 
@@ -678,7 +678,7 @@ export const SharedDataProvider = ({ children }) => {
     
     const totalProgress = userIds.reduce((sum, userId) => {
       const userData = progressData[userId] || {};
-      const courseProgress = userData[courseId] || { progress: 0 };
+      const courseProgress = userData[String(courseId)] || { progress: 0 };
       return sum + courseProgress.progress;
     }, 0);
     
@@ -734,7 +734,7 @@ export const SharedDataProvider = ({ children }) => {
     // 順序付きコースにタスクを追加
     return orderedCourses.map(course => ({
       ...course,
-      tasks: tasks[course.id] || []
+      tasks: tasks[String(course.id)] || []
     }));
   };
 
@@ -1205,7 +1205,7 @@ export const SharedDataProvider = ({ children }) => {
         setCourses(prev => prev.filter(course => course.id !== courseId));
         setTasks(prev => {
           const newTasks = { ...prev };
-          delete newTasks[courseId];
+          delete newTasks[String(courseId)];
           return newTasks;
         });
         
@@ -1213,8 +1213,8 @@ export const SharedDataProvider = ({ children }) => {
         setProgressData(prev => {
           const newProgress = { ...prev };
           Object.keys(newProgress).forEach(userId => {
-            if (newProgress[userId] && newProgress[userId][courseId]) {
-              delete newProgress[userId][courseId];
+            if (newProgress[userId] && newProgress[userId][String(courseId)]) {
+              delete newProgress[userId][String(courseId)];
             }
           });
           return newProgress;
@@ -1231,14 +1231,14 @@ export const SharedDataProvider = ({ children }) => {
         
         // ローカルのタスクデータも削除
         let localTasks = JSON.parse(localStorage.getItem('app_tasks') || '{}');
-        delete localTasks[courseId];
+        delete localTasks[String(courseId)];
         localStorage.setItem('app_tasks', JSON.stringify(localTasks));
         
         // ローカルの進捗データも削除
         let localProgress = JSON.parse(localStorage.getItem('app_course_progress') || '{}');
         Object.keys(localProgress).forEach(userId => {
-          if (localProgress[userId] && localProgress[userId][courseId]) {
-            delete localProgress[userId][courseId];
+          if (localProgress[userId] && localProgress[userId][String(courseId)]) {
+            delete localProgress[userId][String(courseId)];
           }
         });
         localStorage.setItem('app_course_progress', JSON.stringify(localProgress));
@@ -1247,7 +1247,7 @@ export const SharedDataProvider = ({ children }) => {
         let localCompletions = JSON.parse(localStorage.getItem('app_task_completions') || '{}');
         Object.keys(localCompletions).forEach(userId => {
           if (localCompletions[userId]) {
-            const courseTasks = tasks[courseId] || [];
+            const courseTasks = tasks[String(courseId)] || [];
             courseTasks.forEach(task => {
               if (localCompletions[userId][task.id]) {
                 delete localCompletions[userId][task.id];
@@ -1261,7 +1261,7 @@ export const SharedDataProvider = ({ children }) => {
         setCourses(prev => prev.filter(course => course.id !== courseId));
         setTasks(prev => {
           const newTasks = { ...prev };
-          delete newTasks[courseId];
+          delete newTasks[String(courseId)];
           return newTasks;
         });
         
@@ -1269,8 +1269,8 @@ export const SharedDataProvider = ({ children }) => {
         setProgressData(prev => {
           const newProgress = { ...prev };
           Object.keys(newProgress).forEach(userId => {
-            if (newProgress[userId] && newProgress[userId][courseId]) {
-              delete newProgress[userId][courseId];
+            if (newProgress[userId] && newProgress[userId][String(courseId)]) {
+              delete newProgress[userId][String(courseId)];
             }
           });
           return newProgress;
