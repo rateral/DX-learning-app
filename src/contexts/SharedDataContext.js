@@ -177,7 +177,7 @@ export const SharedDataProvider = ({ children }) => {
       console.error('データ取得エラー:', error);
       return { coursesData: [], tasksByGroup: {} };
     }
-  }, [fetchProgress]);
+  }, []);
 
   // 進捗データを取得する関数
   const fetchProgress = useCallback(async (taskData) => {
