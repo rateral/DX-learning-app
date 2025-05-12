@@ -8,6 +8,9 @@ import UserLogin from './components/auth/UserLogin';
 import { UserProvider, useUser } from './contexts/UserContext';
 import { SharedDataProvider, useSharedData } from './contexts/SharedDataContext';
 import { PersonalDataProvider, usePersonalData } from './contexts/PersonalDataContext';
+import { supabase } from './supabase';
+import Login from './components/auth/Login';
+import Signup from './components/auth/Signup';
 
 function Main() {
   const { currentUser } = useUser();
@@ -269,16 +272,26 @@ function Main() {
   );
 }
 
-function App() {
-  return (
-    <UserProvider>
-      <SharedDataProvider>
-        <PersonalDataProvider>
-          <Main />
-        </PersonalDataProvider>
-      </SharedDataProvider>
-    </UserProvider>
-  );
+function AuthGuardedApp() {
+  const [session, setSession] = useState(null);
+  const [showSignup, setShowSignup] = useState(false);
+
+  useEffect(() => {
+    setSession(supabase.auth.session());
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  if (!session) {
+    return showSignup
+      ? <Signup onSignup={() => setShowSignup(false)} onSwitch={() => setShowSignup(false)} />
+      : <Login onLogin={() => setSession(supabase.auth.session())} onSwitch={() => setShowSignup(true)} />;
+  }
+
+  // 認証済みなら本体を表示
+  return <Main />;
 }
 
-export default App;
+export default AuthGuardedApp;
