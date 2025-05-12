@@ -34,6 +34,11 @@ function Main() {
     loading: sessionsLoading
   } = usePersonalData();
 
+  // 初回ロード時に必ずデータを取得
+  useEffect(() => {
+    fetchCoursesAndTasks();
+  }, []);
+
   // コース追加後に再読み込み
   const handleAddCourse = async (courseData) => {
     const result = await addCourse(courseData);
