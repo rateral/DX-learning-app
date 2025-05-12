@@ -622,6 +622,10 @@ export const SharedDataProvider = ({ children }) => {
   const getUserProgress = (userId, courseId) => {
     const userData = progressData[userId] || {};
     const courseProgress = userData[String(courseId)] || { progress: 0 };
+    // 課題が0件なら進捗率は0
+    if (!tasks[String(courseId)] || tasks[String(courseId)].length === 0) {
+      return 0;
+    }
     return courseProgress.progress;
   };
 
