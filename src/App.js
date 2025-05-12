@@ -300,7 +300,9 @@ function AuthGuardedApp() {
   return (
     <UserProvider>
       <SharedDataProvider>
-        <Main />
+        <PersonalDataProvider>
+          <Main />
+        </PersonalDataProvider>
       </SharedDataProvider>
     </UserProvider>
   );
