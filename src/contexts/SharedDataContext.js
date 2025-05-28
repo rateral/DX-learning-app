@@ -258,6 +258,7 @@ export const SharedDataProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setProgressData, setLoading]);
 
   // 初期データの読み込み

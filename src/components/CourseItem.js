@@ -538,18 +538,6 @@ function CourseItem({ course, isExpanded, onToggle, onAddTask, onToggleTaskCompl
     }
   };
 
-  const getCategoryLabel = (category) => {
-    const categories = {
-      programming: 'プログラミング',
-      language: '語学',
-      math: '数学',
-      science: '科学',
-      other: 'その他'
-    };
-    
-    return categories[category] || category;
-  };
-
   return (
     <div className="card" style={{ 
       marginBottom: '0',  // 親コンポーネントでマージンを管理するため0に設定
@@ -563,15 +551,6 @@ function CourseItem({ course, isExpanded, onToggle, onAddTask, onToggleTaskCompl
             {course.title}
           </h3>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ 
-              display: 'inline-block', 
-              backgroundColor: '#e0e0e0', 
-              padding: '3px 8px', 
-              borderRadius: '12px', 
-              fontSize: '0.8rem'
-            }}>
-              {getCategoryLabel(course.category)}
-            </span>
             <div style={{ 
               display: 'flex',
               alignItems: 'center',
