@@ -20,13 +20,24 @@ ChartJS.register(
 );
 
 function ProgressChart({ courses }) {
+  // coursesの安全性チェック
+  if (!courses || !Array.isArray(courses)) {
+    return (
+      <div>
+        <div className="chart-container">
+          <p>データを読み込み中...</p>
+        </div>
+      </div>
+    );
+  }
+  
   // コース進捗データ
   const progressData = {
     labels: courses.map(course => course.title),
     datasets: [
       {
         label: '進捗率 (%)',
-        data: courses.map(course => course.progress),
+        data: courses.map(course => course.progress || 0),
         backgroundColor: 'rgba(76, 175, 80, 0.6)',
         borderColor: 'rgba(76, 175, 80, 1)',
         borderWidth: 1

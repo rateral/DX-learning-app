@@ -197,12 +197,19 @@ function Main() {
   // コース一覧表示用のデータを取得
   const coursesWithProgress = React.useMemo(() => {
     console.log('コースデータを再計算します', { updateTrigger });
+    
+    // coursesが未定義または空の場合は空配列を返す
+    if (!courses || !Array.isArray(courses)) {
+      console.log('コースデータが未定義または無効です:', courses);
+      return [];
+    }
+    
     return courses.map(course => {
       // 現在のユーザーの進捗率を取得
       const progress = getUserProgress(currentUser ? currentUser.id : 'guest', course.id);
       
       // ユーザー別のタスク完了状態を反映
-      const tasksWithCompletion = course.tasks.map(task => ({
+      const tasksWithCompletion = (course.tasks || []).map(task => ({
         ...task,
         completed: isTaskCompletedByUser(currentUser ? currentUser.id : 'guest', course.id, task.id)
       }));
@@ -214,6 +221,25 @@ function Main() {
       };
     });
   }, [courses, currentUser, getUserProgress, isTaskCompletedByUser, updateTrigger]);
+
+  // ローディング状態の表示
+  if (!courses) {
+    return (
+      <div>
+        <Header />
+        <div className="container">
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'center', 
+            alignItems: 'center', 
+            height: '200px' 
+          }}>
+            <p>データを読み込み中...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>

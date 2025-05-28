@@ -264,10 +264,7 @@ export const SharedDataProvider = ({ children }) => {
   useEffect(() => {
     const loadInitialData = async () => {
       try {
-        const { tasksByGroup } = await fetchCoursesAndTasks();
-        
-        // 進捗データをSupabaseから取得
-        await fetchProgress(tasksByGroup);
+        await fetchCoursesAndTasks();
         
         // データ読み込み完了フラグは不要なため削除
       } catch (error) {
@@ -277,7 +274,7 @@ export const SharedDataProvider = ({ children }) => {
     };
 
     loadInitialData();
-  }, [fetchCoursesAndTasks, fetchProgress]);
+  }, [fetchCoursesAndTasks]);
 
   // コース追加
   const addCourse = async (course) => {
@@ -595,6 +592,12 @@ export const SharedDataProvider = ({ children }) => {
 
   // コースとそのタスクを結合したデータを作成（順序付き）
   const getCoursesWithTasks = () => {
+    // coursesが未定義または空の場合は空配列を返す
+    if (!courses || !Array.isArray(courses)) {
+      console.log('getCoursesWithTasks: コースデータが未定義または無効です');
+      return [];
+    }
+    
     // ヘルパー関数：順序配列に基づいてコースを並び替え
     const orderCoursesByOrderArray = (coursesList, orderArray) => {
       // ロギング
@@ -814,84 +817,84 @@ export const SharedDataProvider = ({ children }) => {
   };
   
   // コース順序の読み込み（Supabase）
-  const loadCoursesOrderFromSupabase = async () => {
-    console.log('コース順序をSupabaseから読み込み試行...');
-    
-    try {
-      // まずはSupabaseクライアント経由で試す
-      try {
-        console.log('Supabaseクライアントでコース順序取得を試みます...');
-        const { data, error } = await supabase
-          .from('course_order')
-          .select('*')
-          .maybeSingle();
-        
-        if (error && error.code !== 'PGRST116') {
-          console.error('コース順序取得エラー:', error);
-          console.error('エラー詳細:', {
-            エラーコード: error.code,
-            エラーメッセージ: error.message,
-            ヒント: error.hint,
-            詳細: error.details
-          });
-          throw error;
-        }
-        
-        if (data?.order_array) {
-          console.log('Supabaseクライアントからコース順序を取得しました:', data.order_array);
-          return data.order_array;
-        }
-      } catch (supabaseClientError) {
-        console.error('Supabaseクライアントでの取得に失敗:', supabaseClientError);
-      }
-      
-      // クライアントでの取得に失敗した場合は直接APIを使用
-      try {
-        console.log('Fetch APIでコース順序取得を試みます...');
-        const response = await fetch(
-          'https://cpueevdrecsauwnifoom.supabase.co/rest/v1/course_order?select=*', 
-          {
-            method: 'GET',
-            headers: {
-              'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwdWVldmRyZWNzYXV3bmlmb29tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyNzU3NDYsImV4cCI6MjA2MTg1MTc0Nn0.HqwV6dhELkH7ZDCMuHTYO7TY6v0h4GcPUbCPwwYix4I',
-              'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwdWVldmRyZWNzYXV3bmlmb29tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyNzU3NDYsImV4cCI6MjA2MTg1MTc0Nn0.HqwV6dhELkH7ZDCMuHTYO7TY6v0h4GcPUbCPwwYix4I`,
-              'Accept': 'application/json'
-            }
-          }
-        );
-        
-        if (response.ok) {
-          const data = await response.json();
-          if (data && data.length > 0 && data[0].order_array) {
-            console.log('Fetch APIからコース順序を取得しました:', data[0].order_array);
-            return data[0].order_array;
-          }
-        } else {
-          const errorText = await response.text();
-          console.error('Fetch APIでのコース順序取得エラー:', errorText);
-        }
-      } catch (fetchError) {
-        console.error('Fetch APIでの取得に失敗:', fetchError);
-      }
-      
-      // Supabaseからの取得に失敗した場合はローカルストレージを参照
-      const storedOrder = localStorage.getItem('app_course_order');
-      if (storedOrder) {
-        try {
-          const orderArray = JSON.parse(storedOrder);
-          console.log('ローカルストレージからコース順序を取得しました:', orderArray);
-          return orderArray;
-        } catch (e) {
-          console.error('ローカルストレージのコース順序のパースに失敗:', e);
-        }
-      }
-    } catch (error) {
-      console.error('コース順序の読み込みエラー:', error);
-    }
-    
-    console.log('コース順序の取得に失敗したため、空の配列を返します');
-    return [];
-  };
+  // const loadCoursesOrderFromSupabase = async () => {
+  //   console.log('コース順序をSupabaseから読み込み試行...');
+  //   
+  //   try {
+  //     // まずはSupabaseクライアント経由で試す
+  //     try {
+  //       console.log('Supabaseクライアントでコース順序取得を試みます...');
+  //       const { data, error } = await supabase
+  //         .from('course_order')
+  //         .select('*')
+  //         .maybeSingle();
+  //       
+  //       if (error && error.code !== 'PGRST116') {
+  //         console.error('コース順序取得エラー:', error);
+  //         console.error('エラー詳細:', {
+  //           エラーコード: error.code,
+  //           エラーメッセージ: error.message,
+  //           ヒント: error.hint,
+  //           詳細: error.details
+  //         });
+  //         throw error;
+  //       }
+  //       
+  //       if (data?.order_array) {
+  //         console.log('Supabaseクライアントからコース順序を取得しました:', data.order_array);
+  //         return data.order_array;
+  //       }
+  //     } catch (supabaseClientError) {
+  //       console.error('Supabaseクライアントでの取得に失敗:', supabaseClientError);
+  //     }
+  //     
+  //     // クライアントでの取得に失敗した場合は直接APIを使用
+  //     try {
+  //       console.log('Fetch APIでコース順序取得を試みます...');
+  //       const response = await fetch(
+  //         'https://cpueevdrecsauwnifoom.supabase.co/rest/v1/course_order?select=*', 
+  //         {
+  //           method: 'GET',
+  //           headers: {
+  //             'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwdWVldmRyZWNzYXV3bmlmb29tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyNzU3NDYsImV4cCI6MjA2MTg1MTc0Nn0.HqwV6dhELkH7ZDCMuHTYO7TY6v0h4GcPUbCPwwYix4I',
+  //             'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwdWVldmRyZWNzYXV3bmlmb29tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyNzU3NDYsImV4cCI6MjA2MTg1MTc0Nn0.HqwV6dhELkH7ZDCMuHTYO7TY6v0h4GcPUbCPwwYix4I`,
+  //             'Accept': 'application/json'
+  //           }
+  //         }
+  //       );
+  //       
+  //       if (response.ok) {
+  //         const data = await response.json();
+  //         if (data && data.length > 0 && data[0].order_array) {
+  //           console.log('Fetch APIからコース順序を取得しました:', data[0].order_array);
+  //           return data[0].order_array;
+  //         }
+  //       } else {
+  //         const errorText = await response.text();
+  //         console.error('Fetch APIでのコース順序取得エラー:', errorText);
+  //       }
+  //     } catch (fetchError) {
+  //       console.error('Fetch APIでの取得に失敗:', fetchError);
+  //     }
+  //     
+  //     // Supabaseからの取得に失敗した場合はローカルストレージを参照
+  //     const storedOrder = localStorage.getItem('app_course_order');
+  //     if (storedOrder) {
+  //       try {
+  //         const orderArray = JSON.parse(storedOrder);
+  //         console.log('ローカルストレージからコース順序を取得しました:', orderArray);
+  //         return orderArray;
+  //       } catch (e) {
+  //         console.error('ローカルストレージのコース順序のパースに失敗:', e);
+  //       }
+  //     }
+  //   } catch (error) {
+  //     console.error('コース順序の読み込みエラー:', error);
+  //   }
+  //   
+  //   console.log('コース順序の取得に失敗したため、空の配列を返します');
+  //   return [];
+  // };
   
   // コース順序の並び替え
   const reorderCourses = async (startIndex, endIndex) => {
