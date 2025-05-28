@@ -15,8 +15,8 @@ function Main() {
   const { currentUser } = useUser();
   const [updateTrigger, setUpdateTrigger] = useState(0);
   const { 
-    addCourse, 
-    addTask,
+    courses,
+    addCourse,
     updateCourse,
     deleteCourse,
     updateTask,
@@ -24,22 +24,19 @@ function Main() {
     toggleUserTaskCompletion,
     isTaskCompletedByUser,
     getUserProgress,
-    getAverageProgress,
     getCoursesWithTasks,
     reorderCourses,
     fetchCoursesAndTasks
   } = useSharedData();
   
   const {
-    studySessions,
-    addStudySession,
-    loading: sessionsLoading
+    addStudySession
   } = usePersonalData();
 
   // 初回ロード時に必ずデータを取得
   useEffect(() => {
     fetchCoursesAndTasks();
-  }, []);
+  }, [fetchCoursesAndTasks]);
 
   // コース追加後に再読み込み
   const handleAddCourse = async (courseData) => {
@@ -198,9 +195,6 @@ function Main() {
   };
 
   // コース一覧表示用のデータを取得
-  const courses = getCoursesWithTasks();
-  
-  // 表示データに進捗状況を追加（現在のユーザーのみの表示）
   const coursesWithProgress = React.useMemo(() => {
     console.log('コースデータを再計算します', { updateTrigger });
     return courses.map(course => {
@@ -241,7 +235,7 @@ function Main() {
           <CourseList 
             key={`list-${currentUser ? currentUser.id : 'guest'}`}
             courses={coursesWithProgress} 
-            onAddTask={addTask} 
+            onAddTask={addCourse} 
             onToggleTaskCompletion={handleTaskToggle} 
             onEditCourse={handleEditCourse}
             onDeleteCourse={handleDeleteCourse}

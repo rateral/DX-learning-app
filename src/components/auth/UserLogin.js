@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { useUser } from '../../contexts/UserContext';
-import UserList from './UserList';
 
 function UserLogin() {
-  const { users, currentUser, login, logout, addUser, deleteUser, loading, isUsingLocalStorage } = useUser();
+  const { users, currentUser, login, addUser, deleteUser, reorderUsers, loading, isUsingLocalStorage } = useUser();
   const [showNewUserForm, setShowNewUserForm] = useState(false);
   const [newUserName, setNewUserName] = useState('');
   const [isCreatingUser, setIsCreatingUser] = useState(false);
+  const [draggedIndex, setDraggedIndex] = useState(null);
 
   const handleCreateUser = async (e) => {
     e.preventDefault();
@@ -65,59 +65,148 @@ function UserLogin() {
     }
   };
 
+  // ドラッグ開始
+  const handleDragStart = (e, index) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', e.target.outerHTML);
+    // ドラッグ中のスタイルを設定
+    e.target.style.opacity = '0.5';
+  };
+
+  // ドラッグ終了
+  const handleDragEnd = (e) => {
+    e.target.style.opacity = '1';
+    setDraggedIndex(null);
+  };
+
+  // ドラッグオーバー
+  const handleDragOver = (e, index) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  // ドロップ
+  const handleDrop = (e, dropIndex) => {
+    e.preventDefault();
+    
+    if (draggedIndex === null || draggedIndex === dropIndex) {
+      return;
+    }
+
+    console.log('ドラッグ&ドロップ:', {
+      from: draggedIndex,
+      to: dropIndex,
+      sourceUser: users[draggedIndex]?.name,
+      targetUser: users[dropIndex]?.name
+    });
+
+    // ユーザーの順序を変更
+    reorderUsers(draggedIndex, dropIndex);
+    setDraggedIndex(null);
+  };
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '15px' }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center', flex: 1 }}>
-          {/* 既存ユーザー一覧 */}
-          {users.map(user => (
-            <div 
-              key={user.id} 
-              onClick={() => currentUser?.id !== user.id && login(user.id)}
-              style={{ 
-                position: 'relative',
-                padding: '8px 12px',
-                backgroundColor: currentUser && currentUser.id === user.id ? '#e3f2fd' : '#f5f5f5',
-                borderRadius: '4px',
-                cursor: currentUser?.id === user.id ? 'default' : 'pointer',
-                border: currentUser && currentUser.id === user.id ? '2px solid #3f51b5' : '1px solid #ddd',
-                minWidth: '100px',
-                textAlign: 'center',
-                transition: 'all 0.2s ease',
-                fontWeight: 'bold',
-                color: currentUser && currentUser.id === user.id ? '#3f51b5' : '#333'
-              }}
-            >
-              {user.name}
-              
-              {/* 削除ボタン（現在のユーザーでない場合のみ表示） */}
-              {(!currentUser || currentUser.id !== user.id) && (
-                <button
-                  onClick={(e) => handleDeleteUser(e, user.id, user.name)}
-                  style={{
+        <div style={{ flex: 1 }}>
+          <div style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '10px',
+            alignItems: 'center',
+            minHeight: '50px',
+            padding: '5px'
+          }}>
+            {users.map((user, index) => (
+              <div
+                key={user.id}
+                draggable={true}
+                onDragStart={(e) => handleDragStart(e, index)}
+                onDragEnd={handleDragEnd}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDrop={(e) => handleDrop(e, index)}
+                onClick={(e) => {
+                  // ドラッグ中でない場合のみログイン処理を実行
+                  if (draggedIndex === null && currentUser?.id !== user.id) {
+                    login(user.id);
+                  }
+                }}
+                style={{
+                  position: 'relative',
+                  padding: '8px 12px',
+                  backgroundColor: currentUser && currentUser.id === user.id 
+                    ? '#e3f2fd' 
+                    : draggedIndex === index
+                      ? '#ffffff' 
+                      : '#f5f5f5',
+                  borderRadius: '4px',
+                  cursor: draggedIndex === index
+                    ? 'grabbing' 
+                    : currentUser?.id === user.id 
+                      ? 'grab' 
+                      : 'pointer',
+                  border: currentUser && currentUser.id === user.id 
+                    ? '2px solid #3f51b5' 
+                    : draggedIndex === index
+                      ? '2px solid #2196f3'
+                      : '1px solid #ddd',
+                  minWidth: '100px',
+                  textAlign: 'center',
+                  transition: 'all 0.2s ease',
+                  fontWeight: 'bold',
+                  color: currentUser && currentUser.id === user.id ? '#3f51b5' : '#333',
+                  boxShadow: draggedIndex === index ? '0 5px 15px rgba(0,0,0,0.3)' : 'none',
+                  transform: draggedIndex === index ? 'rotate(2deg)' : 'none',
+                  userSelect: 'none'
+                }}
+              >
+                {user.name}
+                
+                {/* 削除ボタン（現在のユーザーでない場合のみ表示） */}
+                {(!currentUser || currentUser.id !== user.id) && (
+                  <button
+                    onClick={(e) => handleDeleteUser(e, user.id, user.name)}
+                    style={{
+                      position: 'absolute',
+                      top: '-8px',
+                      right: '-8px',
+                      width: '20px',
+                      height: '20px',
+                      borderRadius: '50%',
+                      backgroundColor: '#f44336',
+                      color: 'white',
+                      border: 'none',
+                      fontSize: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      lineHeight: '1',
+                      zIndex: 10
+                    }}
+                    title="ユーザーを削除"
+                  >
+                    ❌
+                  </button>
+                )}
+                
+                {/* ドラッグハンドル表示（ドラッグ中のみ） */}
+                {draggedIndex === index && (
+                  <div style={{
                     position: 'absolute',
-                    top: '-8px',
-                    right: '-8px',
-                    width: '20px',
-                    height: '20px',
-                    borderRadius: '50%',
-                    backgroundColor: '#f44336',
-                    color: 'white',
-                    border: 'none',
-                    fontSize: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    lineHeight: '1'
-                  }}
-                  title="ユーザーを削除"
-                >
-                  ❌
-                </button>
-              )}
-            </div>
-          ))}
+                    top: '2px',
+                    left: '2px',
+                    fontSize: '10px',
+                    color: '#666',
+                    pointerEvents: 'none'
+                  }}>
+                    ⋮⋮
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
         
         {/* 右側のボタンエリア */}
@@ -139,6 +228,19 @@ function UserLogin() {
             新規ユーザー作成
           </button>
         </div>
+      </div>
+
+      {/* 使用方法の説明 */}
+      <div style={{
+        backgroundColor: '#e8f5e8',
+        color: '#2e7d32',
+        padding: '8px 12px',
+        borderRadius: '4px',
+        marginBottom: '15px',
+        fontSize: '0.9em',
+        border: '1px solid #c8e6c9'
+      }}>
+        💡 ユーザー名をドラッグ&ドロップで順序を変更できます
       </div>
 
       {/* 動作モード表示 */}

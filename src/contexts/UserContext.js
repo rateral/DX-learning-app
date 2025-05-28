@@ -361,6 +361,28 @@ export const UserProvider = ({ children }) => {
     }
   };
 
+  // ユーザーの順序変更
+  const reorderUsers = (startIndex, endIndex) => {
+    try {
+      console.log('ユーザー順序変更:', { startIndex, endIndex });
+      
+      if (startIndex === endIndex) {
+        return;
+      }
+
+      const result = [...users];
+      const [removed] = result.splice(startIndex, 1);
+      result.splice(endIndex, 0, removed);
+
+      setUsers(result);
+      console.log('ユーザー順序変更完了');
+      return true;
+    } catch (error) {
+      console.error('ユーザー順序変更エラー:', error);
+      return false;
+    }
+  };
+
   return (
     <UserContext.Provider value={{ 
       users, 
@@ -370,6 +392,7 @@ export const UserProvider = ({ children }) => {
       logout, 
       updateUser,
       deleteUser,
+      reorderUsers,
       loading,
       isUsingLocalStorage: useLocalStorage
     }}>

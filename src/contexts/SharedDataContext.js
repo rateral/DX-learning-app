@@ -8,11 +8,10 @@ export const useSharedData = () => useContext(SharedDataContext);
 export const SharedDataProvider = ({ children }) => {
   // データ状態
   const [courses, setCourses] = useState([]);
-  const [tasks, setTasks] = useState({});
+  const [tasks, setTasks] = useState([]);
   const [progressData, setProgressData] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [courseOrder, setCourseOrder] = useState([]); // コース順序を保持する状態
-  const [dataLoaded, setDataLoaded] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [courseOrder, setCourseOrder] = useState([]);
   const [learningSessions, setLearningSessions] = useState([]); // 学習セッション用の状態を追加
 
   // タスクとコースを一緒に取得する関数
@@ -330,7 +329,7 @@ export const SharedDataProvider = ({ children }) => {
     };
 
     loadInitialData();
-  }, []);
+  }, [fetchCoursesAndTasks]);
 
   // コース追加
   const addCourse = async (course) => {

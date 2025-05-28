@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase';
 
 function CourseItem({ course, isExpanded, onToggle, onAddTask, onToggleTaskCompletion, onEditCourse, onDeleteCourse, onEditTask, onDeleteTask }) {
@@ -17,7 +17,6 @@ function CourseItem({ course, isExpanded, onToggle, onAddTask, onToggleTaskCompl
   });
   const [isProcessing, setIsProcessing] = useState(false);
   const [localTasks, setLocalTasks] = useState([]);
-  const [isReorderingTask, setIsReorderingTask] = useState(false);
   const [draggedTaskId, setDraggedTaskId] = useState(null);
   const [dropTargetTaskId, setDropTargetTaskId] = useState(null);
 
@@ -42,7 +41,7 @@ function CourseItem({ course, isExpanded, onToggle, onAddTask, onToggleTaskCompl
   };
 
   // 保存された順序を適用する関数
-  const applyTaskOrder = (savedOrder) => {
+  const applyTaskOrder = useCallback((savedOrder) => {
     // 保存された順序と現在のタスクを照合
     const currentTaskIds = course.tasks.map(task => task.id);
     // 順序が有効かチェック（両方に存在するIDのみ）
@@ -66,10 +65,10 @@ function CourseItem({ course, isExpanded, onToggle, onAddTask, onToggleTaskCompl
       // 保存された順序が無効な場合は現在のタスクをそのまま使用
       setLocalTasks([...course.tasks]);
     }
-  };
+  }, [course.tasks, course.title]);
 
   // ローカルストレージからのフォールバック
-  const fallbackToLocalStorage = () => {
+  const fallbackToLocalStorage = useCallback(() => {
     const savedOrders = JSON.parse(localStorage.getItem('app_task_orders') || '{}');
     const savedOrder = savedOrders[course.id];
     
@@ -79,7 +78,7 @@ function CourseItem({ course, isExpanded, onToggle, onAddTask, onToggleTaskCompl
       // 保存された順序がない場合は現在のタスクをそのまま使用
       setLocalTasks([...course.tasks]);
     }
-  };
+  }, [course.id, course.tasks, applyTaskOrder]);
 
   // タスク順序を保存するヘルパー関数
   const saveTaskOrder = async (updatedTasks) => {
@@ -297,7 +296,7 @@ function CourseItem({ course, isExpanded, onToggle, onAddTask, onToggleTaskCompl
     } else {
       setLocalTasks([]);
     }
-  }, [course.id, course.tasks, course.title]);
+  }, [course.id, course.tasks, course.title, applyTaskOrder, fallbackToLocalStorage]);
 
   // タスク位置変更ハンドラー
   const handleTaskPositionChange = async (currentIndex, newPosition) => {
@@ -310,7 +309,7 @@ function CourseItem({ course, isExpanded, onToggle, onAddTask, onToggleTaskCompl
     }
     
     // 処理中フラグを設定
-    setIsReorderingTask(true);
+    setIsProcessing(true);
     
     try {
       console.log(`タスク移動: ${currentIndex} → ${targetIndex}`);
@@ -349,7 +348,7 @@ function CourseItem({ course, isExpanded, onToggle, onAddTask, onToggleTaskCompl
     } catch (error) {
       console.error('タスク移動処理エラー:', error);
     } finally {
-      setIsReorderingTask(false);
+      setIsProcessing(false);
     }
   };
 

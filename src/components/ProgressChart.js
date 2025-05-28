@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -9,7 +9,6 @@ import {
   Legend
 } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
-import { useUser } from '../contexts/UserContext';
 
 ChartJS.register(
   CategoryScale,
@@ -21,8 +20,6 @@ ChartJS.register(
 );
 
 function ProgressChart({ courses }) {
-  const { currentUser } = useUser();
-  
   // コース進捗データ
   const progressData = {
     labels: courses.map(course => course.title),
