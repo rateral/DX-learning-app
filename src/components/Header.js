@@ -20,12 +20,7 @@ function Header() {
           </div>
         )}
       </div>
-      <nav className="nav">
-        <a href="#users">ユーザー</a>
-        <a href="#courses">コース</a>
-        <a href="#progress">進捗</a>
-        <a href="#study">学習記録</a>
-      </nav>
+      {/* ナビゲーションメニューを削除 */}
     </header>
   );
 }
