@@ -6,9 +6,7 @@ function CourseItem({ course, isExpanded, onToggle, onAddTask, onToggleTaskCompl
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
   const [editData, setEditData] = useState({
-    title: '',
-    description: '',
-    category: ''
+    title: ''
   });
   const [showTaskEditForm, setShowTaskEditForm] = useState(false);
   const [editTaskData, setEditTaskData] = useState({
@@ -19,14 +17,13 @@ function CourseItem({ course, isExpanded, onToggle, onAddTask, onToggleTaskCompl
   const [localTasks, setLocalTasks] = useState([]);
   const [draggedTaskId, setDraggedTaskId] = useState(null);
   const [dropTargetTaskId, setDropTargetTaskId] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // コンポーネントがマウントされたときや、編集フォームが開かれたときに
   // 現在のコースデータをフォームにセット
   const openEditForm = () => {
     setEditData({
-      title: course.title,
-      description: course.description || '',
-      category: course.category || 'other'
+      title: course.title
     });
     setShowEditForm(true);
   };
@@ -423,32 +420,31 @@ function CourseItem({ course, isExpanded, onToggle, onAddTask, onToggleTaskCompl
     }
   };
 
-  const handleEditSubmit = async (e) => {
-    e.preventDefault();
-    
+  const handleUpdateCourse = async () => {
     if (!editData.title.trim()) {
-      alert('タイトルは必須です。');
+      alert('タイトルを入力してください');
       return;
     }
-    
+
     try {
-      setIsProcessing(true);
-      console.log('コース編集開始:', { courseId: course.id, updates: editData });
+      console.log('コース更新開始:', { courseId: course.id, title: editData.title });
       
-      const result = await onEditCourse(course.id, editData);
+      const success = await onUpdateCourse(course.id, {
+        title: editData.title.trim(),
+        description: course.description || '', // 既存の値を保持
+        category: course.category || 'other' // 既存の値を保持
+      });
       
-      if (result) {
-        console.log('コース編集成功:', result);
+      if (success) {
         setShowEditForm(false);
+        setEditData({ title: '' });
+        console.log('コース更新完了');
       } else {
-        console.error('コース編集に失敗しました');
-        alert('コースの編集に失敗しました。もう一度お試しください。');
+        alert('コースの更新に失敗しました');
       }
     } catch (error) {
-      console.error('コース編集エラー:', error);
-      alert(`エラーが発生しました: ${error.message || 'コース編集時に問題が発生しました'}`);
-    } finally {
-      setIsProcessing(false);
+      console.error('コース更新エラー:', error);
+      alert('コースの更新中にエラーが発生しました');
     }
   };
 
@@ -769,7 +765,10 @@ function CourseItem({ course, isExpanded, onToggle, onAddTask, onToggleTaskCompl
             overflow: 'auto'
           }}>
             <h3>コースを編集</h3>
-            <form onSubmit={handleEditSubmit}>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              handleUpdateCourse();
+            }}>
               <div style={{ marginBottom: '15px' }}>
                 <label htmlFor="title" style={{ display: 'block', marginBottom: '5px' }}>タイトル *</label>
                 <input
@@ -782,59 +781,19 @@ function CourseItem({ course, isExpanded, onToggle, onAddTask, onToggleTaskCompl
                 />
               </div>
               
-              <div style={{ marginBottom: '15px' }}>
-                <label htmlFor="description" style={{ display: 'block', marginBottom: '5px' }}>説明</label>
-                <textarea
-                  id="description"
-                  value={editData.description}
-                  onChange={(e) => setEditData({ ...editData, description: e.target.value })}
-                  style={{ width: '100%', padding: '8px', minHeight: '100px' }}
-                />
-              </div>
-              
-              <div style={{ marginBottom: '15px' }}>
-                <label htmlFor="category" style={{ display: 'block', marginBottom: '5px' }}>カテゴリ</label>
-                <select
-                  id="category"
-                  value={editData.category}
-                  onChange={(e) => setEditData({ ...editData, category: e.target.value })}
-                  style={{ width: '100%', padding: '8px' }}
-                >
-                  <option value="programming">プログラミング</option>
-                  <option value="language">語学</option>
-                  <option value="math">数学</option>
-                  <option value="science">科学</option>
-                  <option value="other">その他</option>
-                </select>
-              </div>
-              
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <button
-                  type="button"
-                  onClick={() => setShowEditForm(false)}
-                  disabled={isProcessing}
-                  style={{
-                    backgroundColor: '#f44336',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    padding: '10px 15px'
-                  }}
-                >
+                <button type="button" onClick={() => setShowEditForm(false)}>
                   キャンセル
                 </button>
-                <button
-                  type="submit"
-                  disabled={!editData.title.trim() || isProcessing}
-                  style={{
-                    backgroundColor: '#4caf50',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    padding: '10px 15px'
+                <button 
+                  type="submit" 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleUpdateCourse();
                   }}
+                  style={{ backgroundColor: '#4caf50', color: 'white' }}
                 >
-                  {isProcessing ? '保存中...' : '保存'}
+                  更新
                 </button>
               </div>
             </form>
