@@ -17,7 +17,6 @@ function CourseItem({ course, isExpanded, onToggle, onAddTask, onToggleTaskCompl
   const [localTasks, setLocalTasks] = useState([]);
   const [draggedTaskId, setDraggedTaskId] = useState(null);
   const [dropTargetTaskId, setDropTargetTaskId] = useState(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // コンポーネントがマウントされたときや、編集フォームが開かれたときに
   // 現在のコースデータをフォームにセット
@@ -429,7 +428,7 @@ function CourseItem({ course, isExpanded, onToggle, onAddTask, onToggleTaskCompl
     try {
       console.log('コース更新開始:', { courseId: course.id, title: editData.title });
       
-      const success = await onUpdateCourse(course.id, {
+      const success = await onEditCourse(course.id, {
         title: editData.title.trim(),
         description: course.description || '', // 既存の値を保持
         category: course.category || 'other' // 既存の値を保持
