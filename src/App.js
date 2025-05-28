@@ -231,11 +231,9 @@ function Main() {
         </div>
         
         <div className="card">
-          <h2>学習進捗チャート</h2>
           <ProgressChart 
             key={`chart-${currentUser ? currentUser.id : 'guest'}`} 
             courses={coursesWithProgress} 
-            studySessions={studySessions} 
           />
         </div>
         

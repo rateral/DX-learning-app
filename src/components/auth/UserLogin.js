@@ -46,23 +46,7 @@ function UserLogin() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-        <h2 style={{ margin: 0 }}>ユーザー管理</h2>
-        {currentUser ? (
-          <div className="user-panel" style={{ display: 'flex', alignItems: 'center' }}>
-            <div>
-              <p style={{ margin: '0' }}><strong>{currentUser.name}</strong> としてログイン中</p>
-            </div>
-            <button 
-              onClick={logout} 
-              style={{ 
-                marginLeft: '10px',
-                backgroundColor: '#f44336'
-              }}
-            >
-              ログアウト
-            </button>
-          </div>
-        ) : (
+        {!currentUser ? (
           <button 
             onClick={() => setShowNewUserForm(true)}
             style={{ 
@@ -72,6 +56,44 @@ function UserLogin() {
           >
             新規ユーザー作成
           </button>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', width: '100%', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+              {users.map(user => (
+                <div 
+                  key={user.id} 
+                  onClick={() => currentUser?.id !== user.id && login(user.id)}
+                  style={{ 
+                    padding: '8px 12px',
+                    backgroundColor: currentUser && currentUser.id === user.id ? '#e3f2fd' : '#f5f5f5',
+                    borderRadius: '4px',
+                    cursor: currentUser?.id === user.id ? 'default' : 'pointer',
+                    border: currentUser && currentUser.id === user.id ? '2px solid #3f51b5' : '1px solid #ddd',
+                    minWidth: '100px',
+                    textAlign: 'center',
+                    transition: 'all 0.2s ease',
+                    fontWeight: 'bold',
+                    color: currentUser && currentUser.id === user.id ? '#3f51b5' : '#333'
+                  }}
+                >
+                  {user.name}
+                </div>
+              ))}
+            </div>
+            <button 
+              onClick={logout} 
+              style={{ 
+                backgroundColor: '#f44336',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                padding: '8px 12px',
+                cursor: 'pointer'
+              }}
+            >
+              ログアウト
+            </button>
+          </div>
         )}
       </div>
 
@@ -130,16 +152,10 @@ function UserLogin() {
         </div>
       )}
 
-      {loading ? (
+      {loading && (
         <div style={{ textAlign: 'center', padding: '20px' }}>
           <p>ユーザーデータを読み込み中...</p>
         </div>
-      ) : (
-        users.length > 0 ? <UserList /> : (
-          <div className="user-list empty">
-            <p>まだユーザーが登録されていません。</p>
-          </div>
-        )
       )}
     </div>
   );

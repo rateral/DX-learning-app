@@ -411,7 +411,7 @@ function CourseItem({ course, isExpanded, onToggle, onAddTask, onToggleTaskCompl
       console.log('タスク追加結果:', result);
       
       if (result) {
-        setNewTaskTitle('');
+    setNewTaskTitle('');
       } else {
         console.error('タスク追加に失敗しました');
         alert('タスクの追加に失敗しました。もう一度お試しください。');
@@ -583,13 +583,13 @@ function CourseItem({ course, isExpanded, onToggle, onAddTask, onToggleTaskCompl
                 backgroundColor: '#f0f0f0',
                 borderRadius: '10px',
                 overflow: 'hidden'
-              }}>
-                <div style={{ 
-                  width: `${course.progress}%`, 
-                  backgroundColor: course.progress >= 100 ? '#4caf50' : '#4caf50',
-                  height: '10px'
-                }}></div>
-              </div>
+            }}>
+              <div style={{ 
+                width: `${course.progress}%`, 
+                backgroundColor: course.progress >= 100 ? '#4caf50' : '#4caf50',
+                height: '10px'
+              }}></div>
+            </div>
               <span>{course.progress}%</span>
             </div>
             
@@ -648,7 +648,7 @@ function CourseItem({ course, isExpanded, onToggle, onAddTask, onToggleTaskCompl
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    padding: '8px 0',
+                  padding: '8px 0',
                     borderBottom: '1px solid #e0e0e0',
                     backgroundColor: draggedTaskId === task.id ? '#f0f8ff' : 
                                     dropTargetTaskId === task.id ? '#e8f5e9' : 'transparent',
@@ -665,12 +665,12 @@ function CourseItem({ course, isExpanded, onToggle, onAddTask, onToggleTaskCompl
                 >
                   <div style={{
                     marginRight: '10px',
-                    display: 'flex',
+                  display: 'flex',
                     justifyContent: 'center',
                     alignItems: 'center',
                     width: '16px',
                     height: '16px'
-                  }}>
+                }}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <path d="M4 6H20M4 12H20M4 18H20" stroke="#757575" strokeWidth="2" strokeLinecap="round"/>
                     </svg>
