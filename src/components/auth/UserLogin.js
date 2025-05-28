@@ -7,6 +7,7 @@ function UserLogin() {
   const [newUserName, setNewUserName] = useState('');
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState(null);
+  const [deleteMode, setDeleteMode] = useState(false);
 
   const handleCreateUser = async (e) => {
     e.preventDefault();
@@ -164,8 +165,8 @@ function UserLogin() {
               >
                 {user.name}
                 
-                {/* 削除ボタン（現在のユーザーでない場合のみ表示） */}
-                {(!currentUser || currentUser.id !== user.id) && (
+                {/* 削除ボタン（削除モードで、かつ現在のユーザーでない場合のみ表示） */}
+                {deleteMode && (!currentUser || currentUser.id !== user.id) && (
                   <button
                     onClick={(e) => handleDeleteUser(e, user.id, user.name)}
                     style={{
@@ -227,6 +228,23 @@ function UserLogin() {
             disabled={showNewUserForm || loading}
           >
             新規ユーザー作成
+          </button>
+          
+          {/* ユーザー削除ボタン */}
+          <button 
+            onClick={() => setDeleteMode(!deleteMode)}
+            style={{ 
+              backgroundColor: deleteMode ? '#ff9800' : '#f44336',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              padding: '8px 12px',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap'
+            }}
+            disabled={showNewUserForm || loading}
+          >
+            {deleteMode ? '削除モード終了' : 'ユーザー削除'}
           </button>
         </div>
       </div>

@@ -274,6 +274,7 @@ export const SharedDataProvider = ({ children }) => {
     };
 
     loadInitialData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchCoursesAndTasks]);
 
   // コース追加
