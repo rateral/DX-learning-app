@@ -163,7 +163,7 @@ function CourseList({ courses, onAddTask, onToggleTaskCompletion, onEditCourse, 
             <div style={{ display: 'flex', alignItems: 'stretch' }}>
               <div
                 style={{
-                  width: '40px',
+                  width: '28px',
                   backgroundColor: '#f5f5f5',
                   borderRadius: '4px 0 0 4px',
                   display: 'flex',
@@ -179,12 +179,12 @@ function CourseList({ courses, onAddTask, onToggleTaskCompletion, onEditCourse, 
                   disabled={index === 0 || isProcessing}
                   style={{
                     width: '100%',
-                    height: '40px',
+                    height: '28px',
                     border: 'none',
                     backgroundColor: index === 0 ? '#f0f0f0' : '#e8f5e9',
                     color: index === 0 ? '#bdbdbd' : '#4caf50',
                     cursor: index === 0 || isProcessing ? 'default' : 'pointer',
-                    padding: '8px 0',
+                    padding: '4px 0',
                     borderRadius: '4px 0 0 0',
                     display: 'flex',
                     justifyContent: 'center',
@@ -193,7 +193,7 @@ function CourseList({ courses, onAddTask, onToggleTaskCompletion, onEditCourse, 
                   }}
                   title="上に移動"
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M12 5L5 12H19L12 5Z" fill={index === 0 ? '#bdbdbd' : '#4caf50'} />
                   </svg>
                 </button>
@@ -203,12 +203,12 @@ function CourseList({ courses, onAddTask, onToggleTaskCompletion, onEditCourse, 
                   disabled={index === localCourses.length - 1 || isProcessing}
                   style={{
                     width: '100%',
-                    height: '40px',
+                    height: '28px',
                     border: 'none',
                     backgroundColor: index === localCourses.length - 1 ? '#f0f0f0' : '#e8f5e9',
                     color: index === localCourses.length - 1 ? '#bdbdbd' : '#4caf50',
                     cursor: index === localCourses.length - 1 || isProcessing ? 'default' : 'pointer',
-                    padding: '8px 0',
+                    padding: '4px 0',
                     borderRadius: '0 0 0 4px',
                     display: 'flex',
                     justifyContent: 'center',
@@ -217,7 +217,7 @@ function CourseList({ courses, onAddTask, onToggleTaskCompletion, onEditCourse, 
                   }}
                   title="下に移動"
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M12 19L5 12H19L12 19Z" fill={index === localCourses.length - 1 ? '#bdbdbd' : '#4caf50'} />
                   </svg>
                 </button>
