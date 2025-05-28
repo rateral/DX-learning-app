@@ -46,8 +46,7 @@ function ProgressChart({ courses }) {
         position: 'top',
       },
       title: {
-        display: true,
-        text: 'コース別進捗率'
+        display: false  // タイトルを表示しない
       }
     }
   };

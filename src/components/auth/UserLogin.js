@@ -3,7 +3,7 @@ import { useUser } from '../../contexts/UserContext';
 import UserList from './UserList';
 
 function UserLogin() {
-  const { users, currentUser, login, logout, addUser, loading, isUsingLocalStorage } = useUser();
+  const { users, currentUser, login, logout, addUser, deleteUser, loading, isUsingLocalStorage } = useUser();
   const [showNewUserForm, setShowNewUserForm] = useState(false);
   const [newUserName, setNewUserName] = useState('');
   const [isCreatingUser, setIsCreatingUser] = useState(false);
@@ -43,49 +43,101 @@ function UserLogin() {
     }
   };
 
+  const handleDeleteUser = async (e, userId, userName) => {
+    e.stopPropagation(); // ユーザーカードのクリックイベントを阻止
+    
+    if (currentUser && currentUser.id === userId) {
+      alert('現在ログイン中のユーザーは削除できません。');
+      return;
+    }
+    
+    const confirmed = window.confirm(`${userName}を削除しますか？`);
+    if (!confirmed) return;
+    
+    try {
+      const result = await deleteUser(userId);
+      if (!result.success) {
+        throw new Error(result.error || '削除に失敗しました');
+      }
+    } catch (error) {
+      console.error('ユーザー削除エラー:', error);
+      alert(`ユーザーの削除に失敗しました: ${error.message}`);
+    }
+  };
+
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', width: '100%', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
-            {/* 既存ユーザー一覧 */}
-            {users.map(user => (
-              <div 
-                key={user.id} 
-                onClick={() => currentUser?.id !== user.id && login(user.id)}
-                style={{ 
-                  padding: '8px 12px',
-                  backgroundColor: currentUser && currentUser.id === user.id ? '#e3f2fd' : '#f5f5f5',
-                  borderRadius: '4px',
-                  cursor: currentUser?.id === user.id ? 'default' : 'pointer',
-                  border: currentUser && currentUser.id === user.id ? '2px solid #3f51b5' : '1px solid #ddd',
-                  minWidth: '100px',
-                  textAlign: 'center',
-                  transition: 'all 0.2s ease',
-                  fontWeight: 'bold',
-                  color: currentUser && currentUser.id === user.id ? '#3f51b5' : '#333'
-                }}
-              >
-                {user.name}
-              </div>
-            ))}
-            
-            {/* 新規ユーザー作成ボタン */}
-            <button 
-              onClick={() => setShowNewUserForm(true)}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '15px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center', flex: 1 }}>
+          {/* 既存ユーザー一覧 */}
+          {users.map(user => (
+            <div 
+              key={user.id} 
+              onClick={() => currentUser?.id !== user.id && login(user.id)}
               style={{ 
-                backgroundColor: '#4caf50',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
+                position: 'relative',
                 padding: '8px 12px',
-                cursor: 'pointer'
+                backgroundColor: currentUser && currentUser.id === user.id ? '#e3f2fd' : '#f5f5f5',
+                borderRadius: '4px',
+                cursor: currentUser?.id === user.id ? 'default' : 'pointer',
+                border: currentUser && currentUser.id === user.id ? '2px solid #3f51b5' : '1px solid #ddd',
+                minWidth: '100px',
+                textAlign: 'center',
+                transition: 'all 0.2s ease',
+                fontWeight: 'bold',
+                color: currentUser && currentUser.id === user.id ? '#3f51b5' : '#333'
               }}
-              disabled={showNewUserForm || loading}
             >
-              新規ユーザー作成
-            </button>
-          </div>
+              {user.name}
+              
+              {/* 削除ボタン（現在のユーザーでない場合のみ表示） */}
+              {(!currentUser || currentUser.id !== user.id) && (
+                <button
+                  onClick={(e) => handleDeleteUser(e, user.id, user.name)}
+                  style={{
+                    position: 'absolute',
+                    top: '-8px',
+                    right: '-8px',
+                    width: '20px',
+                    height: '20px',
+                    borderRadius: '50%',
+                    backgroundColor: '#f44336',
+                    color: 'white',
+                    border: 'none',
+                    fontSize: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    lineHeight: '1'
+                  }}
+                  title="ユーザーを削除"
+                >
+                  ❌
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+        
+        {/* 右側のボタンエリア */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginLeft: '20px' }}>
+          {/* 新規ユーザー作成ボタン */}
+          <button 
+            onClick={() => setShowNewUserForm(true)}
+            style={{ 
+              backgroundColor: '#4caf50',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              padding: '8px 12px',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap'
+            }}
+            disabled={showNewUserForm || loading}
+          >
+            新規ユーザー作成
+          </button>
           
           {/* ログアウトボタン（ログイン中のみ表示） */}
           {currentUser && (
@@ -97,7 +149,8 @@ function UserLogin() {
                 border: 'none',
                 borderRadius: '4px',
                 padding: '8px 12px',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                whiteSpace: 'nowrap'
               }}
             >
               ログアウト
