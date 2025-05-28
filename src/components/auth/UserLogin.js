@@ -231,19 +231,6 @@ function UserLogin() {
         </div>
       </div>
 
-      {/* 使用方法の説明 */}
-      <div style={{
-        backgroundColor: '#e8f5e8',
-        color: '#2e7d32',
-        padding: '8px 12px',
-        borderRadius: '4px',
-        marginBottom: '15px',
-        fontSize: '0.9em',
-        border: '1px solid #c8e6c9'
-      }}>
-        💡 ユーザー名をドラッグ&ドロップで順序を変更できます
-      </div>
-
       {/* 動作モード表示 */}
       {isUsingLocalStorage && (
         <div style={{ 
