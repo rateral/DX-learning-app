@@ -97,20 +97,6 @@ function CourseList({ courses, onAddTask, onToggleTaskCompletion, onEditCourse, 
   if (localCourses.length === 0) {
     return (
       <div>
-        <div style={{ 
-          backgroundColor: 'rgba(76, 175, 80, 0.1)', 
-          padding: '10px 15px', 
-          borderRadius: '4px', 
-          marginBottom: '15px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}>
-          <span style={{ fontWeight: 'bold', color: '#4caf50' }}>コース一覧</span>
-          <span style={{ marginLeft: '10px', color: '#666', fontSize: '0.9rem' }}>
-            学習中のコースとその課題一覧
-          </span>
-        </div>
         <p>コースがまだ登録されていません。新しいコースを追加してください。</p>
       </div>
     );
@@ -118,27 +104,7 @@ function CourseList({ courses, onAddTask, onToggleTaskCompletion, onEditCourse, 
 
   return (
     <div>
-      <div style={{ 
-        backgroundColor: 'rgba(76, 175, 80, 0.1)', 
-        padding: '10px 15px', 
-        borderRadius: '4px', 
-        marginBottom: '15px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }}>
-        <span style={{ 
-          fontWeight: 'bold',
-          color: '#4caf50'
-        }}>
-          コース一覧
-        </span>
-        <span style={{ marginLeft: '10px', color: '#666', fontSize: '0.9rem' }}>
-          学習中のコースとその課題一覧
-        </span>
-      </div>
-      
-      <div className="courses-container">
+      <div className="courses-container" style={{ position: 'relative' }}>
         {localCourses.map((course, index) => (
           <div
             key={course.id}
