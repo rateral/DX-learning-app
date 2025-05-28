@@ -15,6 +15,7 @@ export const SharedDataProvider = ({ children }) => {
   const [learningSessions, setLearningSessions] = useState([]); // 学習セッション用の状態を追加
 
   // タスクとコースを一緒に取得する関数
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const fetchCoursesAndTasks = useCallback(async () => {
     try {
       // コース取得
@@ -258,7 +259,6 @@ export const SharedDataProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setProgressData, setLoading]);
 
   // 初期データの読み込み
@@ -275,7 +275,6 @@ export const SharedDataProvider = ({ children }) => {
     };
 
     loadInitialData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchCoursesAndTasks]);
 
   // コース追加

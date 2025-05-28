@@ -24,6 +24,7 @@ function CourseItem({ course, isExpanded, onToggle, onAddTask, onToggleTaskCompl
     setEditData({
       title: course.title
     });
+    setShowTaskEditForm(false); // タスク編集フォームを閉じる
     setShowEditForm(true);
   };
 
@@ -33,6 +34,7 @@ function CourseItem({ course, isExpanded, onToggle, onAddTask, onToggleTaskCompl
       id: task.id,
       title: task.title
     });
+    setShowEditForm(false); // コース編集フォームを閉じる
     setShowTaskEditForm(true);
   };
 
@@ -533,6 +535,24 @@ function CourseItem({ course, isExpanded, onToggle, onAddTask, onToggleTaskCompl
     }
   };
 
+  // ESCキーでモーダルを閉じる
+  useEffect(() => {
+    const handleEscKey = (e) => {
+      if (e.key === 'Escape') {
+        setShowEditForm(false);
+        setShowTaskEditForm(false);
+      }
+    };
+
+    if (showEditForm || showTaskEditForm) {
+      document.addEventListener('keydown', handleEscKey);
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleEscKey);
+    };
+  }, [showEditForm, showTaskEditForm]);
+
   return (
     <div className="card" style={{ 
       marginBottom: '0',  // 親コンポーネントでマージンを管理するため0に設定
@@ -742,131 +762,215 @@ function CourseItem({ course, isExpanded, onToggle, onAddTask, onToggleTaskCompl
 
       {/* コース編集モーダル */}
       {showEditForm && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            backgroundColor: 'white',
-            padding: '20px',
-            borderRadius: '8px',
-            width: '90%',
-            maxWidth: '500px',
-            maxHeight: '80vh',
-            overflow: 'auto'
-          }}>
-            <h3>コースを編集</h3>
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              handleUpdateCourse();
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 10000
+          }}
+          onClick={() => setShowEditForm(false)}
+        >
+          <div 
+            style={{
+              backgroundColor: 'white',
+              padding: '20px',
+              borderRadius: '8px',
+              width: '90%',
+              maxWidth: '500px',
+              height: 'auto',
+              maxHeight: '90vh',
+              overflow: 'visible',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: '0 0 20px 0' }}>コースを編集</h3>
+            
+            <div style={{ 
+              marginBottom: '20px'
             }}>
-              <div style={{ marginBottom: '15px' }}>
-                <label htmlFor="title" style={{ display: 'block', marginBottom: '5px' }}>タイトル *</label>
-                <input
-                  id="title"
-                  type="text"
-                  value={editData.title}
-                  onChange={(e) => setEditData({ ...editData, title: e.target.value })}
-                  style={{ width: '100%', padding: '8px' }}
-                  required
-                />
-              </div>
-              
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <button type="button" onClick={() => setShowEditForm(false)}>
-                  キャンセル
-                </button>
-                <button 
-                  type="submit" 
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleUpdateCourse();
-                  }}
-                  style={{ backgroundColor: '#4caf50', color: 'white' }}
-                >
-                  更新
-                </button>
-              </div>
-            </form>
+              <label htmlFor="title" style={{ 
+                display: 'block', 
+                marginBottom: '5px',
+                fontWeight: 'bold'
+              }}>タイトル *</label>
+              <input
+                id="title"
+                type="text"
+                value={editData.title}
+                onChange={(e) => setEditData({ ...editData, title: e.target.value })}
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  boxSizing: 'border-box',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  fontSize: '14px'
+                }}
+                required
+              />
+            </div>
+            
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between',
+              gap: '10px',
+              marginTop: '20px',
+              paddingTop: '20px',
+              borderTop: '1px solid #eee'
+            }}>
+              <button 
+                type="button" 
+                onClick={() => setShowEditForm(false)}
+                style={{
+                  backgroundColor: '#6c757d',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  padding: '12px 24px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  minWidth: '100px'
+                }}
+              >
+                キャンセル
+              </button>
+              <button 
+                type="button"
+                onClick={handleUpdateCourse}
+                style={{ 
+                  backgroundColor: '#4caf50', 
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  padding: '12px 24px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  minWidth: '100px'
+                }}
+              >
+                更新
+              </button>
+            </div>
           </div>
         </div>
       )}
 
       {/* タスク編集モーダル */}
       {showTaskEditForm && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            backgroundColor: 'white',
-            padding: '20px',
-            borderRadius: '8px',
-            width: '90%',
-            maxWidth: '500px',
-            maxHeight: '80vh',
-            overflow: 'auto'
-          }}>
-            <h3>課題を編集</h3>
-            <form onSubmit={handleTaskEditSubmit}>
-              <div style={{ marginBottom: '15px' }}>
-                <label htmlFor="taskTitle" style={{ display: 'block', marginBottom: '5px' }}>タイトル *</label>
-                <input
-                  id="taskTitle"
-                  type="text"
-                  value={editTaskData.title}
-                  onChange={(e) => setEditTaskData({ ...editTaskData, title: e.target.value })}
-                  style={{ width: '100%', padding: '8px' }}
-                  required
-                />
-              </div>
-              
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <button
-                  type="button"
-                  onClick={() => setShowTaskEditForm(false)}
-                  disabled={isProcessing}
-                  style={{
-                    backgroundColor: '#f44336',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    padding: '10px 15px'
-                  }}
-                >
-                  キャンセル
-                </button>
-                <button
-                  type="submit"
-                  disabled={!editTaskData.title.trim() || isProcessing}
-                  style={{
-                    backgroundColor: '#4caf50',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    padding: '10px 15px'
-                  }}
-                >
-                  {isProcessing ? '保存中...' : '保存'}
-                </button>
-              </div>
-            </form>
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 10001
+          }}
+          onClick={() => setShowTaskEditForm(false)}
+        >
+          <div 
+            style={{
+              backgroundColor: 'white',
+              padding: '20px',
+              borderRadius: '8px',
+              width: '90%',
+              maxWidth: '500px',
+              height: 'auto',
+              maxHeight: '90vh',
+              overflow: 'visible',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: '0 0 20px 0' }}>課題を編集</h3>
+            
+            <div style={{ 
+              marginBottom: '20px'
+            }}>
+              <label htmlFor="taskTitle" style={{ 
+                display: 'block', 
+                marginBottom: '5px',
+                fontWeight: 'bold'
+              }}>タイトル *</label>
+              <input
+                id="taskTitle"
+                type="text"
+                value={editTaskData.title}
+                onChange={(e) => setEditTaskData({ ...editTaskData, title: e.target.value })}
+                style={{ 
+                  width: '100%', 
+                  padding: '10px',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  fontSize: '14px',
+                  boxSizing: 'border-box'
+                }}
+                required
+              />
+            </div>
+            
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between',
+              gap: '10px',
+              marginTop: '20px',
+              paddingTop: '20px',
+              borderTop: '1px solid #eee'
+            }}>
+              <button
+                type="button"
+                onClick={() => setShowTaskEditForm(false)}
+                disabled={isProcessing}
+                style={{
+                  backgroundColor: '#6c757d',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  padding: '12px 24px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  minWidth: '100px'
+                }}
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={async (e) => {
+                  e.preventDefault();
+                  await handleTaskEditSubmit(e);
+                }}
+                disabled={!editTaskData.title.trim() || isProcessing}
+                style={{
+                  backgroundColor: '#4caf50',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  padding: '12px 24px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  minWidth: '100px'
+                }}
+              >
+                {isProcessing ? '保存中...' : '保存'}
+              </button>
+            </div>
           </div>
         </div>
       )}
