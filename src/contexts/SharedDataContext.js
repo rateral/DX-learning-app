@@ -258,7 +258,7 @@ export const SharedDataProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setProgressData, setLoading]);
 
   // 初期データの読み込み
   useEffect(() => {

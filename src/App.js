@@ -171,7 +171,10 @@ function Main() {
       return [];
     }
     
-    return courses.map(course => {
+    // 正しい順序でコースを取得
+    const orderedCourses = getCoursesWithTasks();
+    
+    return orderedCourses.map(course => {
       // 現在のユーザーの進捗率を取得
       const progress = getUserProgress(currentUser ? currentUser.id : 'guest', course.id);
       
@@ -187,7 +190,7 @@ function Main() {
         tasks: tasksWithCompletion
       };
     });
-  }, [courses, currentUser, getUserProgress, isTaskCompletedByUser, updateTrigger]);
+  }, [courses, currentUser, getUserProgress, isTaskCompletedByUser, updateTrigger, getCoursesWithTasks]);
 
   // ローディング状態の表示
   if (!courses) {

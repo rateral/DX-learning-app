@@ -112,6 +112,7 @@ export const UserProvider = ({ children }) => {
 
     fetchUsers();
     loadCurrentUser();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ユーザー一覧をlocalStorageにもバックアップ
