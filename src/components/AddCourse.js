@@ -2,8 +2,6 @@ import React, { useState } from 'react';
 
 function AddCourse({ onAddCourse }) {
   const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [category, setCategory] = useState('');
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -12,15 +10,13 @@ function AddCourse({ onAddCourse }) {
     
     onAddCourse({
       title,
-      description,
-      category,
+      description: '', // 空文字列で固定
+      category: 'other', // デフォルト値で固定
       createdAt: new Date().toISOString()
     });
     
     // フォームをリセット
     setTitle('');
-    setDescription('');
-    setCategory('');
   };
 
   return (
@@ -45,33 +41,6 @@ function AddCourse({ onAddCourse }) {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           required
-        />
-      </div>
-      
-      <div className="form-group">
-        <label htmlFor="category">カテゴリ</label>
-        <select
-          id="category"
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          required
-        >
-          <option value="">選択してください</option>
-          <option value="programming">プログラミング</option>
-          <option value="language">語学</option>
-          <option value="math">数学</option>
-          <option value="science">科学</option>
-          <option value="other">その他</option>
-        </select>
-      </div>
-      
-      <div className="form-group">
-        <label htmlFor="description">説明</label>
-        <textarea
-          id="description"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          rows="3"
         />
       </div>
       
