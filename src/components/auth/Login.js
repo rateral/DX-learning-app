@@ -38,10 +38,6 @@ export default function Login({ onLogin, onSwitch }) {
       />
       <button type="submit" style={{ width: '100%' }}>ログイン</button>
       {error && <div style={{ color: 'red', marginTop: 10 }}>{error}</div>}
-      <div style={{ marginTop: 20 }}>
-        アカウントをお持ちでない方は
-        <button type="button" onClick={onSwitch} style={{ marginLeft: 5 }}>新規登録</button>
-      </div>
     </form>
   );
 } 

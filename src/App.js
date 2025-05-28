@@ -10,7 +10,6 @@ import { SharedDataProvider, useSharedData } from './contexts/SharedDataContext'
 import { PersonalDataProvider, usePersonalData } from './contexts/PersonalDataContext';
 import { supabase } from './supabase';
 import Login from './components/auth/Login';
-import Signup from './components/auth/Signup';
 
 function Main() {
   const { currentUser } = useUser();
@@ -272,7 +271,6 @@ function Main() {
 
 function AuthGuardedApp() {
   const [session, setSession] = useState(null);
-  const [showSignup, setShowSignup] = useState(false);
 
   useEffect(() => {
     // 初回にセッションを取得
@@ -287,11 +285,9 @@ function AuthGuardedApp() {
   }, []);
 
   if (!session) {
-    return showSignup
-      ? <Signup onSignup={() => setShowSignup(false)} onSwitch={() => setShowSignup(false)} />
-      : <Login onLogin={() => {
-          supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
-        }} onSwitch={() => setShowSignup(true)} />;
+    return <Login onLogin={() => {
+      supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
+    }} />;
   }
 
   // 認証済みなら本体を表示
