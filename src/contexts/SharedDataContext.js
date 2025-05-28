@@ -149,7 +149,7 @@ export const SharedDataProvider = ({ children }) => {
         return acc;
       }, {}) || {};
       
-      setTasks(tasksByGroup);
+      setTasks(tasksByGroup || {});
       // タスク取得後に進捗データも取得
       await fetchProgress(tasksByGroup);
       
@@ -260,71 +260,19 @@ export const SharedDataProvider = ({ children }) => {
     }
   }, []);
 
-  // 初期データのロード
+  // 初期データの読み込み
   useEffect(() => {
     const loadInitialData = async () => {
       try {
-        // コース一覧をSupabaseから取得
-        const { data: coursesData, error: coursesError } = await supabase
-          .from('courses')
-          .select('*');
-          
-        if (coursesError) {
-          console.error('コース一覧の取得エラー:', coursesError);
-          throw coursesError;
-        }
-
-        // コースデータをセット
-        setCourses(coursesData || []);
+        const { coursesData, tasksByGroup } = await fetchCoursesAndTasks();
         
-        // コース並び順をSupabaseから取得
-        try {
-          console.log('初期ロード時にコース順序を取得します...');
-          const savedOrder = await loadCoursesOrderFromSupabase();
-          if (savedOrder && Array.isArray(savedOrder) && savedOrder.length > 0) {
-            console.log('初期ロード時にコース順序をセットします:', savedOrder);
-            setCourseOrder(savedOrder);
-          } else {
-            console.log('保存された順序が見つからないため、デフォルト順序を使用します');
-            // デフォルト順序を設定（コースIDの配列）
-            const defaultOrder = coursesData.map(course => course.id);
-            setCourseOrder(defaultOrder);
-            
-            // デフォルト順序を保存
-            saveCoursesOrderToSupabase(defaultOrder)
-              .then(success => {
-                if (success) {
-                  console.log('デフォルトのコース順序を保存しました');
-                  localStorage.setItem('app_course_order', JSON.stringify(defaultOrder));
-                }
-              })
-              .catch(err => console.error('デフォルト順序の保存に失敗:', err));
-          }
-        } catch (orderError) {
-          console.error('コース順序の取得エラー:', orderError);
-          // エラー時はコース順をそのまま使用
-          const defaultOrder = coursesData.map(course => course.id);
-          setCourseOrder(defaultOrder);
-        }
+        // 進捗データをSupabaseから取得
+        await fetchProgress(tasksByGroup);
         
-        // タスク一覧をSupabaseから取得
-        const { data: tasksData, error: tasksError } = await supabase
-          .from('tasks')
-          .select('*');
-          
-        if (tasksError) {
-          console.error('タスク一覧の取得エラー:', tasksError);
-          throw tasksError;
-        }
-        
-        // タスクデータをセット
-        setTasks(tasksData || []);
-        
-        // データ読み込み完了
-        setDataLoaded(true);
+        // データ読み込み完了フラグは不要なため削除
       } catch (error) {
         console.error('初期データのロードに失敗:', error);
-        setDataLoaded(true); // エラーでもロード完了とマーク
+        // エラー時の処理を継続
       }
     };
 
@@ -387,20 +335,20 @@ export const SharedDataProvider = ({ children }) => {
     }
   };
   
-  // ローカルのタスク状態を更新するヘルパー関数
-  const updateLocalTasks = (courseId, newTask) => {
-    setTasks(prev => {
-      const courseTasks = prev[courseId] || [];
-      return {
-        ...prev,
-        [courseId]: [...courseTasks, {
-          id: newTask.id,
-          title: newTask.title,
-          createdAt: newTask.created_at
-        }]
-      };
-    });
-  };
+  // ローカルのタスク状態を更新するヘルパー関数（現在未使用）
+  // const updateLocalTasks = (courseId, newTask) => {
+  //   setTasks(prev => {
+  //     const courseTasks = prev[courseId] || [];
+  //     return {
+  //       ...prev,
+  //       [courseId]: [...courseTasks, {
+  //         id: newTask.id,
+  //         title: newTask.title,
+  //         createdAt: newTask.created_at
+  //       }]
+  //     };
+  //   });
+  // };
 
   // タスク完了状態の設定
   const setUserTaskCompletion = async (userId, courseId, taskId, isCompleted) => {
@@ -422,7 +370,7 @@ export const SharedDataProvider = ({ children }) => {
           throw checkError;
         }
         
-        let result;
+        let dbResult;
         
         if (existingData) {
           // 既存データの更新
@@ -437,7 +385,7 @@ export const SharedDataProvider = ({ children }) => {
             console.error('データ更新エラー:', error.message);
             throw error;
           }
-          result = data;
+          dbResult = data;
         } else {
           // 新規データの挿入
           const { data, error } = await supabase
@@ -453,7 +401,7 @@ export const SharedDataProvider = ({ children }) => {
             console.error('データ挿入エラー:', error.message);
             throw error;
           }
-          result = data;
+          dbResult = data;
         }
         
         // 進捗率の計算
@@ -1278,24 +1226,6 @@ export const SharedDataProvider = ({ children }) => {
       return true;
     } catch (error) {
       console.error('タスク削除エラー:', error);
-      return false;
-    }
-  };
-
-  // タスク順序変更（reorderTask相当）
-  const reorderTask = async (courseId, newOrder) => {
-    try {
-      // 順序データをSupabaseに保存
-      const { data, error } = await supabase
-        .from('task_order')
-        .update({ order_array: newOrder, updated_at: new Date().toISOString() })
-        .eq('course_id', courseId);
-      if (error) throw error;
-      // 順序変更後に必ず全体を再取得
-      await fetchCoursesAndTasks();
-      return true;
-    } catch (error) {
-      console.error('タスク順序変更エラー:', error);
       return false;
     }
   };
