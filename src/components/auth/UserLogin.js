@@ -138,24 +138,6 @@ function UserLogin() {
           >
             新規ユーザー作成
           </button>
-          
-          {/* ログアウトボタン（ログイン中のみ表示） */}
-          {currentUser && (
-            <button 
-              onClick={logout} 
-              style={{ 
-                backgroundColor: '#f44336',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                padding: '8px 12px',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              ログアウト
-            </button>
-          )}
         </div>
       </div>
 
