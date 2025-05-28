@@ -1,8 +1,30 @@
 import React from 'react';
 import { useUser } from '../contexts/UserContext';
+import { supabase } from '../supabase';
 
 function Header() {
   const { currentUser, logout } = useUser();
+  
+  const handleLogout = async () => {
+    try {
+      // アプリレベルのログアウト
+      logout();
+      
+      // Supabase認証からもログアウト
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('Supabaseログアウトエラー:', error);
+        // エラーがあってもアプリレベルのログアウトは実行されているので、続行
+      }
+      
+      // ページをリロードして認証画面に戻る
+      window.location.reload();
+    } catch (error) {
+      console.error('ログアウトエラー:', error);
+      // エラーがあってもアプリレベルのログアウトは実行されているので、リロード
+      window.location.reload();
+    }
+  };
   
   return (
     <header className="header">
@@ -10,7 +32,7 @@ function Header() {
         <h1>学習進捗管理アプリ</h1>
         {currentUser && (
           <button 
-            onClick={logout}
+            onClick={handleLogout}
             style={{
               backgroundColor: '#757575',
               color: 'white',
