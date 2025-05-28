@@ -145,43 +145,10 @@ function Main() {
       const result = await reorderCourses(numStartIndex, numEndIndex);
       
       if (result) {
-        console.log('App: コース順序変更成功、データを再取得します');
+        console.log('App: コース順序変更成功');
         
-        // 少し待機してから再取得（Supabaseの更新を待つ）
-        await new Promise(resolve => setTimeout(resolve, 300));
-        
-        // 順序変更後はコースデータを再取得
-        await fetchCoursesAndTasks();
-        
-        // 移動後のコース一覧をログ出力
-        console.log('App: 移動後のコース一覧:',
-          getCoursesWithTasks().map((course, idx) => `${idx}: ${course.title}`)
-        );
-        
-        // UIの強制更新（状態更新を行って確実に再レンダリングを促す）
+        // UIの更新を促すためのトリガー
         setUpdateTrigger(prev => prev + 1);
-        
-        // 遅延更新を設定して画面が確実に更新されるようにする
-        setTimeout(() => {
-          console.log('App: 遅延更新を実行します');
-          setUpdateTrigger(prev => prev + 1);
-          
-          // コース一覧ログ出力
-          console.log('App: 遅延更新後のコース一覧:',
-            getCoursesWithTasks().map((course, idx) => `${idx}: ${course.title}`)
-          );
-          
-          // 更に少し待機してもう一度更新
-          setTimeout(() => {
-            console.log('App: 2回目の遅延更新を実行します');
-            setUpdateTrigger(prev => prev + 1);
-            
-            // 最終確認用のコース一覧ログ出力
-            console.log('App: 最終的なコース一覧:',
-              getCoursesWithTasks().map((course, idx) => `${idx}: ${course.title}`)
-            );
-          }, 300);
-        }, 300);
         
         return true;
       } else {
