@@ -46,40 +46,49 @@ function UserLogin() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-        {!currentUser ? (
-          <button 
-            onClick={() => setShowNewUserForm(true)}
-            style={{ 
-              backgroundColor: '#4caf50',
-            }}
-            disabled={showNewUserForm || loading}
-          >
-            新規ユーザー作成
-          </button>
-        ) : (
-          <div style={{ display: 'flex', alignItems: 'center', width: '100%', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-              {users.map(user => (
-                <div 
-                  key={user.id} 
-                  onClick={() => currentUser?.id !== user.id && login(user.id)}
-                  style={{ 
-                    padding: '8px 12px',
-                    backgroundColor: currentUser && currentUser.id === user.id ? '#e3f2fd' : '#f5f5f5',
-                    borderRadius: '4px',
-                    cursor: currentUser?.id === user.id ? 'default' : 'pointer',
-                    border: currentUser && currentUser.id === user.id ? '2px solid #3f51b5' : '1px solid #ddd',
-                    minWidth: '100px',
-                    textAlign: 'center',
-                    transition: 'all 0.2s ease',
-                    fontWeight: 'bold',
-                    color: currentUser && currentUser.id === user.id ? '#3f51b5' : '#333'
-                  }}
-                >
-                  {user.name}
-                </div>
-              ))}
-            </div>
+        <div style={{ display: 'flex', alignItems: 'center', width: '100%', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
+            {/* 既存ユーザー一覧 */}
+            {users.map(user => (
+              <div 
+                key={user.id} 
+                onClick={() => currentUser?.id !== user.id && login(user.id)}
+                style={{ 
+                  padding: '8px 12px',
+                  backgroundColor: currentUser && currentUser.id === user.id ? '#e3f2fd' : '#f5f5f5',
+                  borderRadius: '4px',
+                  cursor: currentUser?.id === user.id ? 'default' : 'pointer',
+                  border: currentUser && currentUser.id === user.id ? '2px solid #3f51b5' : '1px solid #ddd',
+                  minWidth: '100px',
+                  textAlign: 'center',
+                  transition: 'all 0.2s ease',
+                  fontWeight: 'bold',
+                  color: currentUser && currentUser.id === user.id ? '#3f51b5' : '#333'
+                }}
+              >
+                {user.name}
+              </div>
+            ))}
+            
+            {/* 新規ユーザー作成ボタン */}
+            <button 
+              onClick={() => setShowNewUserForm(true)}
+              style={{ 
+                backgroundColor: '#4caf50',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                padding: '8px 12px',
+                cursor: 'pointer'
+              }}
+              disabled={showNewUserForm || loading}
+            >
+              新規ユーザー作成
+            </button>
+          </div>
+          
+          {/* ログアウトボタン（ログイン中のみ表示） */}
+          {currentUser && (
             <button 
               onClick={logout} 
               style={{ 
@@ -93,8 +102,8 @@ function UserLogin() {
             >
               ログアウト
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* 動作モード表示 */}
