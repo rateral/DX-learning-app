@@ -87,10 +87,11 @@ function UserLogin() {
   };
 
   // ドロップ
-  const handleDrop = (e, dropIndex) => {
+  const handleDrop = async (e, dropIndex) => {
     e.preventDefault();
     
     if (draggedIndex === null || draggedIndex === dropIndex) {
+      setDraggedIndex(null);
       return;
     }
 
@@ -101,8 +102,8 @@ function UserLogin() {
       targetUser: users[dropIndex]?.name
     });
 
-    // ユーザーの順序を変更
-    reorderUsers(draggedIndex, dropIndex);
+    // ユーザーの順序を変更（非同期）
+    await reorderUsers(draggedIndex, dropIndex);
     setDraggedIndex(null);
   };
 

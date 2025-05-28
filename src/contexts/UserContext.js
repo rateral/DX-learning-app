@@ -2,9 +2,9 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import { v4 as uuidv4 } from 'uuid';
 
-// Supabaseのベース情報
-const SUPABASE_URL = 'https://cpueevdrecsauwnifoom.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwdWVldmRyZWNzYXV3bmlmb29tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyNzU3NDYsImV4cCI6MjA2MTg1MTc0Nn0.HqwV6dhELkH7ZDCMuHTYO7TY6v0h4GcPUbCPwwYix4I';
+// Supabase設定情報を取得
+const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL || 'https://cpueevdrecsauwnifoom.supabase.co';
+const SUPABASE_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwdWVldmRyZWNzYXV3bmlmb29tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyNzU3NDYsImV4cCI6MjA2MTg1MTc0Nn0.HqwV6dhELkH7ZDCMuHTYO7TY6v0h4GcPUbCPwwYix4I';
 
 const UserContext = createContext();
 
@@ -19,58 +19,83 @@ export const UserProvider = ({ children }) => {
   // 初期ロード
   useEffect(() => {
     const fetchUsers = async () => {
+      console.log('ユーザー取得を開始します。ローカルストレージモード:', useLocalStorage);
+      setLoading(true);
+      
       try {
-        console.log('ユーザー一覧を取得しています...');
-        
-        try {
-          // まずはSupabaseクライアントで試す
-          const { data, error } = await supabase.from('users').select('*');
-          
-          if (error) {
-            console.error('Supabaseクライアントエラー:', error);
-            throw error;
-          }
-          
-          console.log('Supabaseから取得したユーザー:', data);
-          setUsers(data || []);
-          return;
-        } catch (clientError) {
-          console.error('Supabaseクライアント例外:', clientError);
-          
-          // 次にFetch APIで直接試す
-          try {
-            const response = await fetch(`${SUPABASE_URL}/rest/v1/users?select=*`, {
-              headers: {
-                'apikey': SUPABASE_KEY,
-                'Authorization': `Bearer ${SUPABASE_KEY}`
+        // ローカルストレージモードの場合
+        if (useLocalStorage) {
+          const storedUsers = localStorage.getItem('app_users');
+          if (storedUsers) {
+            try {
+              const userData = JSON.parse(storedUsers);
+              
+              // 並び順を復元
+              const userOrder = await loadUserOrderFromSupabase();
+              if (userOrder && userOrder.length > 0) {
+                console.log('ユーザー並び順を復元します:', userOrder);
+                const orderedUsers = orderUsersByOrderArray(userData, userOrder);
+                setUsers(orderedUsers);
+                console.log('ローカルストレージから順序付きユーザーをロードしました:', orderedUsers.length);
+              } else {
+                setUsers(userData);
+                console.log('ローカルストレージからユーザーをロードしました（順序無し）:', userData.length);
               }
-            });
-            
-            if (!response.ok) {
-              throw new Error(`API Error: ${response.status} ${response.statusText}`);
+              
+              return;
+            } catch (parseError) {
+              console.error('ローカルストレージのパースエラー:', parseError);
             }
-            
-            const data = await response.json();
-            console.log('Fetch APIから取得したユーザー:', data);
-            setUsers(data);
-            return;
-          } catch (fetchError) {
-            console.error('Fetch API例外:', fetchError);
-            throw fetchError;
           }
+          console.log('ローカルストレージに保存されたユーザーがありません');
+          setUsers([]);
+          return;
+        }
+
+        // オンライン（Supabase）モード
+        console.log('Supabaseからユーザーを取得中...');
+        const { data, error } = await supabase
+          .from('users')
+          .select('*');
+        
+        if (error) {
+          console.error('Supabaseユーザー取得エラー:', error);
+          // エラー時はローカルストレージにフォールバック
+          setUseLocalStorage(true);
+          return;
+        }
+        
+        if (data) {
+          console.log('Supabaseからユーザーを取得しました:', data.length);
+          
+          // 並び順を復元
+          const userOrder = await loadUserOrderFromSupabase();
+          if (userOrder && userOrder.length > 0) {
+            console.log('ユーザー並び順を復元します:', userOrder);
+            const orderedUsers = orderUsersByOrderArray(data, userOrder);
+            setUsers(orderedUsers);
+            console.log('Supabaseから順序付きユーザーをロードしました:', orderedUsers.length);
+          } else {
+            setUsers(data);
+            console.log('Supabaseからユーザーをロードしました（順序無し）:', data.length);
+          }
+          
+          // ローカルストレージにも保存（バックアップとして）
+          localStorage.setItem('app_users', JSON.stringify(data));
+        } else {
+          console.log('ユーザーが存在しません');
+          setUsers([]);
         }
       } catch (error) {
-        console.error('ユーザー一覧の取得に失敗しました。ローカルストレージを使用します:', error);
-        setUseLocalStorage(true);
+        console.error('ユーザー取得中にエラーが発生:', error);
         
-        // ローカルストレージから復元
-        const savedUsers = localStorage.getItem('app_users');
-        if (savedUsers) {
-          console.log('ローカルストレージからユーザーを復元します');
-          setUsers(JSON.parse(savedUsers));
-        } else {
-          // 初回の場合は空配列を保存
-          localStorage.setItem('app_users', JSON.stringify([]));
+        // オンラインモードでエラーが発生した場合、ローカルストレージにフォールバック
+        if (!useLocalStorage) {
+          console.log('ローカルストレージモードにフォールバック');
+          setUseLocalStorage(true);
+          // 再帰的に呼び出してローカルストレージから読み込み
+          await fetchUsers();
+          return;
         }
       } finally {
         setLoading(false);
@@ -361,19 +386,287 @@ export const UserProvider = ({ children }) => {
     }
   };
 
+  // ユーザー順序をSupabaseに保存する関数
+  const saveUserOrderToSupabase = async (userOrder) => {
+    try {
+      console.log('ユーザー順序をSupabaseに保存します:', userOrder);
+      
+      // Supabaseクライアント経由で保存試行
+      try {
+        const { data, error } = await supabase
+          .from('user_order')
+          .select('*')
+          .maybeSingle();
+        
+        if (error && error.code !== 'PGRST116') {
+          console.error('ユーザー順序取得エラー:', error);
+          throw error;
+        }
+        
+        if (data) {
+          // 既存レコードを更新
+          const { error: updateError } = await supabase
+            .from('user_order')
+            .update({ 
+              order_array: userOrder,
+              updated_at: new Date().toISOString() 
+            })
+            .eq('id', data.id);
+          
+          if (updateError) {
+            console.error('ユーザー順序の更新エラー:', updateError);
+            throw updateError;
+          }
+          
+          console.log('Supabaseでユーザー順序を更新しました');
+        } else {
+          // 新規レコードを作成
+          const { error: insertError } = await supabase
+            .from('user_order')
+            .insert([{ 
+              order_array: userOrder,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            }]);
+          
+          if (insertError) {
+            console.error('ユーザー順序の新規作成エラー:', insertError);
+            throw insertError;
+          }
+          
+          console.log('Supabaseでユーザー順序を新規作成しました');
+        }
+        
+        return true;
+      } catch (supabaseClientError) {
+        console.error('Supabaseクライアント経由での保存に失敗:', supabaseClientError);
+        
+        // 直接Fetch APIを使ってSupabaseにアクセス（フォールバック）
+        try {
+          console.log('Fetch APIを使ってユーザー順序保存を試みます...');
+          
+          // 既存レコードを確認
+          const checkResponse = await fetch(
+            `${SUPABASE_URL}/rest/v1/user_order?select=id`, 
+            {
+              method: 'GET',
+              headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': `Bearer ${SUPABASE_KEY}`,
+                'Accept': 'application/json'
+              }
+            }
+          );
+          
+          if (!checkResponse.ok) {
+            const errorText = await checkResponse.text();
+            console.error('ユーザー順序レコード確認エラー:', errorText);
+            throw new Error('ユーザー順序レコード確認に失敗しました');
+          }
+          
+          const checkData = await checkResponse.json();
+          
+          if (checkData && checkData.length > 0) {
+            // 更新(PATCH)
+            const updateResponse = await fetch(
+              `${SUPABASE_URL}/rest/v1/user_order?id=eq.${checkData[0].id}`, 
+              {
+                method: 'PATCH',
+                headers: {
+                  'apikey': SUPABASE_KEY,
+                  'Authorization': `Bearer ${SUPABASE_KEY}`,
+                  'Content-Type': 'application/json',
+                  'Prefer': 'return=minimal'
+                },
+                body: JSON.stringify({
+                  order_array: userOrder,
+                  updated_at: new Date().toISOString()
+                })
+              }
+            );
+            
+            if (!updateResponse.ok) {
+              const updateError = await updateResponse.text();
+              console.error('ユーザー順序更新エラー:', updateError);
+              throw new Error('ユーザー順序の更新に失敗しました');
+            }
+            
+            console.log('Fetch APIでユーザー順序を更新しました');
+          } else {
+            // 新規作成(POST)
+            const insertResponse = await fetch(
+              `${SUPABASE_URL}/rest/v1/user_order`, 
+              {
+                method: 'POST',
+                headers: {
+                  'apikey': SUPABASE_KEY,
+                  'Authorization': `Bearer ${SUPABASE_KEY}`,
+                  'Content-Type': 'application/json',
+                  'Prefer': 'return=minimal'
+                },
+                body: JSON.stringify({
+                  order_array: userOrder,
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString()
+                })
+              }
+            );
+            
+            if (!insertResponse.ok) {
+              const insertError = await insertResponse.text();
+              console.error('ユーザー順序作成エラー:', insertError);
+              throw new Error('ユーザー順序の作成に失敗しました');
+            }
+            
+            console.log('Fetch APIでユーザー順序を新規作成しました');
+          }
+          
+          return true;
+        } catch (fetchError) {
+          console.error('Fetch APIでの保存にも失敗:', fetchError);
+          return false;
+        }
+      }
+    } catch (error) {
+      console.error('ユーザー順序保存エラー:', error);
+      return false;
+    }
+  };
+
+  // ユーザー順序をSupabaseから読み込む関数
+  const loadUserOrderFromSupabase = async () => {
+    try {
+      console.log('ユーザー順序をSupabaseから読み込み試行...');
+      
+      // まずはSupabaseクライアント経由で試す
+      try {
+        const { data, error } = await supabase
+          .from('user_order')
+          .select('*')
+          .maybeSingle();
+        
+        if (error && error.code !== 'PGRST116') {
+          console.error('ユーザー順序取得エラー:', error);
+          throw error;
+        }
+        
+        if (data?.order_array) {
+          console.log('Supabaseからユーザー順序を取得しました:', data.order_array);
+          return data.order_array;
+        }
+      } catch (supabaseClientError) {
+        console.error('Supabaseクライアントでの取得に失敗:', supabaseClientError);
+      }
+      
+      // クライアントでの取得に失敗した場合は直接APIを使用
+      try {
+        const response = await fetch(
+          `${SUPABASE_URL}/rest/v1/user_order?select=*`, 
+          {
+            method: 'GET',
+            headers: {
+              'apikey': SUPABASE_KEY,
+              'Authorization': `Bearer ${SUPABASE_KEY}`,
+              'Accept': 'application/json'
+            }
+          }
+        );
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.length > 0 && data[0].order_array) {
+            console.log('Fetch APIからユーザー順序を取得しました:', data[0].order_array);
+            return data[0].order_array;
+          }
+        } else {
+          const errorText = await response.text();
+          console.error('Fetch APIでのユーザー順序取得エラー:', errorText);
+        }
+      } catch (fetchError) {
+        console.error('Fetch APIでの取得に失敗:', fetchError);
+      }
+      
+      // Supabaseからの取得に失敗した場合はローカルストレージを参照
+      const storedOrder = localStorage.getItem('app_user_order');
+      if (storedOrder) {
+        try {
+          const orderArray = JSON.parse(storedOrder);
+          console.log('ローカルストレージからユーザー順序を取得しました:', orderArray);
+          return orderArray;
+        } catch (e) {
+          console.error('ローカルストレージのユーザー順序のパースに失敗:', e);
+        }
+      }
+    } catch (error) {
+      console.error('ユーザー順序の読み込みエラー:', error);
+    }
+    
+    console.log('ユーザー順序の取得に失敗したため、空の配列を返します');
+    return [];
+  };
+
+  // ヘルパー関数：順序配列に基づいてユーザーを並び替え
+  const orderUsersByOrderArray = (usersList, orderArray) => {
+    console.log('ユーザー並び替え処理', {
+      ユーザー数: usersList.length,
+      順序配列長: orderArray?.length || 0,
+      ユーザーID一覧: usersList.map(u => u.id),
+      順序配列: orderArray
+    });
+    
+    // 順序配列が無効な場合は元のユーザー順を返す
+    if (!orderArray || !Array.isArray(orderArray) || orderArray.length === 0) {
+      console.log('有効な順序配列がないため、元のユーザー順を使用します');
+      return [...usersList];
+    }
+    
+    // ユーザーを順序配列に従って並び替え
+    const orderedUsers = [...usersList].sort((a, b) => {
+      const indexA = orderArray.indexOf(a.id);
+      const indexB = orderArray.indexOf(b.id);
+      
+      // 順序配列にないユーザーは最後に配置
+      if (indexA === -1 && indexB === -1) return 0;
+      if (indexA === -1) return 1;
+      if (indexB === -1) return -1;
+      
+      return indexA - indexB;
+    });
+    
+    console.log('ユーザー並び替え完了:', orderedUsers.map(u => ({id: u.id, name: u.name})));
+    return orderedUsers;
+  };
+
   // ユーザーの順序変更
-  const reorderUsers = (startIndex, endIndex) => {
+  const reorderUsers = async (startIndex, endIndex) => {
     try {
       console.log('ユーザー順序変更:', { startIndex, endIndex });
       
       if (startIndex === endIndex) {
-        return;
+        return true;
       }
 
       const result = [...users];
       const [removed] = result.splice(startIndex, 1);
       result.splice(endIndex, 0, removed);
 
+      // 新しい順序のIDリストを作成
+      const newOrder = result.map(user => user.id);
+      console.log('新しいユーザー順序:', newOrder);
+
+      // Supabaseに順序を保存
+      const saveSuccess = await saveUserOrderToSupabase(newOrder);
+      
+      if (saveSuccess) {
+        console.log('ユーザー順序をSupabaseに保存しました');
+      } else {
+        console.warn('ユーザー順序のSupabase保存に失敗しましたが、ローカルで継続します');
+      }
+
+      // ローカルストレージにもバックアップ
+      localStorage.setItem('app_user_order', JSON.stringify(newOrder));
+      
+      // 状態を更新
       setUsers(result);
       console.log('ユーザー順序変更完了');
       return true;
