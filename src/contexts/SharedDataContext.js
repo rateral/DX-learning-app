@@ -171,10 +171,10 @@ export const SharedDataProvider = ({ children }) => {
         setLearningSessions([]);
       }
       
-      return { coursesData, tasksByGroup };
+      return { tasksByGroup };
     } catch (error) {
       console.error('データ取得エラー:', error);
-      return { coursesData: [], tasksByGroup: {} };
+      return { tasksByGroup: {} };
     }
   }, []);
 
@@ -264,7 +264,7 @@ export const SharedDataProvider = ({ children }) => {
   useEffect(() => {
     const loadInitialData = async () => {
       try {
-        const { coursesData, tasksByGroup } = await fetchCoursesAndTasks();
+        const { tasksByGroup } = await fetchCoursesAndTasks();
         
         // 進捗データをSupabaseから取得
         await fetchProgress(tasksByGroup);
@@ -277,7 +277,7 @@ export const SharedDataProvider = ({ children }) => {
     };
 
     loadInitialData();
-  }, [fetchCoursesAndTasks]);
+  }, [fetchCoursesAndTasks, fetchProgress]);
 
   // コース追加
   const addCourse = async (course) => {
@@ -370,11 +370,9 @@ export const SharedDataProvider = ({ children }) => {
           throw checkError;
         }
         
-        let dbResult;
-        
         if (existingData) {
           // 既存データの更新
-          const { data, error } = await supabase
+          const { error } = await supabase
             .from('task_completions')
             .update({ completed: isCompleted })
             .eq('user_id', userId)
@@ -385,10 +383,9 @@ export const SharedDataProvider = ({ children }) => {
             console.error('データ更新エラー:', error.message);
             throw error;
           }
-          dbResult = data;
         } else {
           // 新規データの挿入
-          const { data, error } = await supabase
+          const { error } = await supabase
             .from('task_completions')
             .insert([{
               user_id: userId,
@@ -401,7 +398,6 @@ export const SharedDataProvider = ({ children }) => {
             console.error('データ挿入エラー:', error.message);
             throw error;
           }
-          dbResult = data;
         }
         
         // 進捗率の計算

@@ -263,28 +263,7 @@ function Main() {
   );
 }
 
-function AuthGuardedApp() {
-  const [session, setSession] = useState(null);
-
-  useEffect(() => {
-    // 初回にセッションを取得
-    supabase.auth.getSession().then((result) => {
-      setSession(result?.data?.session ?? null);
-    });
-    // 状態変化のリスナー
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-    return () => listener.subscription.unsubscribe();
-  }, []);
-
-  if (!session) {
-    return <Login onLogin={() => {
-      supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
-    }} />;
-  }
-
-  // 認証済みなら本体を表示
+function AuthenticatedMain() {
   return (
     <UserProvider>
       <SharedDataProvider>
@@ -294,6 +273,52 @@ function AuthGuardedApp() {
       </SharedDataProvider>
     </UserProvider>
   );
+}
+
+function AuthGuardedApp() {
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // 初回にセッションを取得
+    supabase.auth.getSession().then((result) => {
+      setSession(result?.data?.session ?? null);
+      setLoading(false);
+    }).catch((error) => {
+      console.error('セッション取得エラー:', error);
+      setSession(null);
+      setLoading(false);
+    });
+
+    // 状態変化のリスナー
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  if (loading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh' 
+      }}>
+        <p>読み込み中...</p>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <Login onLogin={() => {
+      supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
+    }} />;
+  }
+
+  // 認証済みなら本体を表示
+  return <AuthenticatedMain />;
 }
 
 export default AuthGuardedApp;
