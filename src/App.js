@@ -17,6 +17,7 @@ function Main() {
   const { 
     courses,
     addCourse,
+    addTask,
     updateCourse,
     deleteCourse,
     updateTask,
@@ -44,6 +45,16 @@ function Main() {
     if (result) {
       // コースが追加されたら、コースとタスクを再取得
       fetchCoursesAndTasks();
+    }
+    return result;
+  };
+
+  // タスク追加ハンドラー
+  const handleAddTask = async (courseId, taskData) => {
+    const result = await addTask(courseId, taskData);
+    if (result) {
+      // UIの強制更新
+      setUpdateTrigger(prev => prev + 1);
     }
     return result;
   };
@@ -231,7 +242,7 @@ function Main() {
           <CourseList 
             key={`list-${currentUser ? currentUser.id : 'guest'}`}
             courses={coursesWithProgress} 
-            onAddTask={addCourse} 
+            onAddTask={handleAddTask} 
             onToggleTaskCompletion={handleTaskToggle} 
             onEditCourse={handleEditCourse}
             onDeleteCourse={handleDeleteCourse}
